@@ -836,100 +836,232 @@ with col_main:
 
     # ── Tab 1: Circuit Diagram ────────────────────────────────────────────
     with tab1:
-        n_ops=len(sim_gates)
-        fig_w=max(9,n_ops*1.15+2.5); fig_h=max(2.4,sim_n*0.72+1.2)
-        fig,ax=plt.subplots(figsize=(fig_w,fig_h))
+        import io, base64
+
+        n_ops = len(sim_gates)
+
+        # ── Zoom control ──────────────────────────────────────────────────
+        zoom = st.select_slider(
+            "Gate spacing",
+            options=["Compact", "Normal", "Spacious", "Wide"],
+            value="Normal", key="circ_zoom",
+            label_visibility="collapsed")
+        zoom_map = {"Compact": 1.1, "Normal": 1.6, "Spacious": 2.2, "Wide": 3.0}
+        G_STEP = zoom_map[zoom]   # horizontal units per gate slot
+        WIRE_H = 1.4              # vertical spacing between wires (fixed, readable)
+        LEFT_PAD = 2.8            # space for qubit labels
+        RIGHT_PAD = 1.0
+
+        # Figure dimensions — width grows with gates, never shrinks below minimum
+        fig_w = LEFT_PAD + max(n_ops, 4) * G_STEP + RIGHT_PAD
+        fig_h = max(3.0, sim_n * WIRE_H + 1.8)
+
+        fig, ax = plt.subplots(figsize=(fig_w, fig_h), dpi=130)
         fig.patch.set_facecolor(BG); ax.set_facecolor(BG)
-        top_y=(sim_n-1)*1.0
-        ax.set_xlim(0,fig_w); ax.set_ylim(-1.0,top_y+0.95); ax.axis("off")
-        wire_ys=[top_y-q*1.0 for q in range(sim_n)]
-        meas_x={}  # track where measurements happen per qubit
-        for q,wy in enumerate(wire_ys):
-            ax.plot([0.5,fig_w-0.3],[wy,wy],color=BORDER,lw=1.4,zorder=1)
-            ax.text(0.35,wy,f"q{q}",color=CYAN,fontsize=9,fontfamily="monospace",va="center",ha="right",fontweight="bold")
-            ax.text(0.55,wy+0.22,"|0⟩",color=DIM,fontsize=7,fontfamily="monospace")
-        gate_xs=([] if n_ops==0 else
-                 [(1.9+fig_w-1.0)/2] if n_ops==1 else
-                 np.linspace(1.9,fig_w-1.0,n_ops).tolist())
-        for step,(op,gx) in enumerate(zip(sim_gates,gate_xs)):
-            ot=op["type"]
-            if ot=="sq":
-                q=op["qubit"]; wy=wire_ys[q]; gk=op["gate"]
-                ec=CYAN if is_running else BLUE
-                fc=SIDEBAR if not is_running else "#E8F4FB"
-                ax.add_patch(mpatches.FancyBboxPatch((gx-0.39,wy-0.26),0.78,0.52,
-                    boxstyle="round,pad=0.03",linewidth=1.3,edgecolor=ec,facecolor=fc,zorder=3))
-                ax.text(gx,wy+(0.08 if SQ_GATES[gk]["has_theta"] else 0),SQ_GATES[gk]["label"],
-                        color=YELLOW,fontsize=8.5,fontfamily="monospace",ha="center",va="center",fontweight="bold",zorder=4)
+
+        top_y = (sim_n - 1) * WIRE_H
+        ax.set_xlim(0, fig_w); ax.set_ylim(-1.2, top_y + 1.1); ax.axis("off")
+        wire_ys = [top_y - q * WIRE_H for q in range(sim_n)]
+        meas_x = {}
+
+        # ── Wires + qubit labels ──────────────────────────────────────────
+        for q, wy in enumerate(wire_ys):
+            ax.plot([LEFT_PAD - 0.3, fig_w - RIGHT_PAD],
+                    [wy, wy], color=BORDER, lw=1.6, zorder=1)
+            ax.text(0.1, wy, f"q{q}", color=CYAN, fontsize=11,
+                    fontfamily="monospace", va="center", ha="left",
+                    fontweight="bold")
+            ax.text(LEFT_PAD - 0.15, wy + 0.28, "|0⟩",
+                    color=DIM, fontsize=8, fontfamily="monospace")
+
+        # ── Gate x-positions: fixed spacing, evenly spread from LEFT_PAD ─
+        if n_ops == 0:
+            gate_xs = []
+        elif n_ops == 1:
+            gate_xs = [LEFT_PAD + G_STEP / 2]
+        else:
+            gate_xs = [LEFT_PAD + 0.5 + i * G_STEP for i in range(n_ops)]
+
+        # ── Box / symbol sizes ────────────────────────────────────────────
+        BW = min(0.9, G_STEP * 0.55)    # gate box width
+        BH = 0.62                        # gate box height
+
+        for step, (op, gx) in enumerate(zip(sim_gates, gate_xs)):
+            ot = op["type"]
+
+            # Step number above wire
+            ax.text(gx, top_y + 0.82, f"#{step+1}",
+                    color=DIM, fontsize=7, fontfamily="monospace", ha="center")
+
+            if ot == "sq":
+                q = op["qubit"]; wy = wire_ys[q]; gk = op["gate"]
+                ec = CYAN if is_running else BLUE
+                fc = "#E8F4FB" if is_running else SIDEBAR
+                ax.add_patch(mpatches.FancyBboxPatch(
+                    (gx - BW/2, wy - BH/2), BW, BH,
+                    boxstyle="round,pad=0.04", linewidth=1.5,
+                    edgecolor=ec, facecolor=fc, zorder=3))
+                ax.text(gx, wy + (0.1 if SQ_GATES[gk]["has_theta"] else 0),
+                        SQ_GATES[gk]["label"], color=YELLOW, fontsize=10,
+                        fontfamily="monospace", ha="center", va="center",
+                        fontweight="bold", zorder=4)
                 if SQ_GATES[gk]["has_theta"]:
-                    ax.text(gx,wy-0.14,f"θ={op['theta']:.2f}",color=DIM,fontsize=6,fontfamily="monospace",ha="center",zorder=4)
-            elif ot=="tq":
-                cy=wire_ys[op["ctrl"]]; ty=wire_ys[op["tgt"]]; gk=op["gate"]
-                ec=PURPLE if is_running else "#8B00B3"
-                fc="#F0E8F8" if is_running else SIDEBAR
-                ylo=min(cy,ty); yhi=max(cy,ty)
-                ax.plot([gx,gx],[ylo,yhi],color=ec,lw=1.6,zorder=2)
-                if gk=="CNOT":
-                    ax.plot(gx,cy,'o',color=ec,markersize=9,zorder=5)
-                    ax.plot(gx,cy,'o',color=BG,markersize=3.5,zorder=6)
-                    r=0.18; ax.add_patch(plt.Circle((gx,ty),r,color=fc,ec=ec,lw=1.6,zorder=5))
-                    ax.plot([gx-r,gx+r],[ty,ty],color=ec,lw=1.6,zorder=6)
-                    ax.plot([gx,gx],[ty-r,ty+r],color=ec,lw=1.6,zorder=6)
-                elif gk=="CZ":
-                    for yy in [cy,ty]: ax.plot(gx,yy,'o',color=ec,markersize=9,zorder=5)
-                elif gk in ("SWAP","iSWAP"):
-                    d=0.16
-                    for yy in [cy,ty]:
-                        ax.plot([gx-d,gx+d],[yy-d,yy+d],color=ec,lw=2,zorder=6)
-                        ax.plot([gx-d,gx+d],[yy+d,yy-d],color=ec,lw=2,zorder=6)
-                    if gk=="iSWAP": ax.text(gx+0.22,(cy+ty)/2,"i",color=ec,fontsize=7,fontfamily="monospace")
+                    ax.text(gx, wy - 0.18, f"θ={op['theta']:.3f}",
+                            color=DIM, fontsize=7, fontfamily="monospace",
+                            ha="center", zorder=4)
+
+            elif ot == "tq":
+                cy = wire_ys[op["ctrl"]]; ty = wire_ys[op["tgt"]]; gk = op["gate"]
+                ec = PURPLE if is_running else "#8B00B3"
+                fc = "#F0E8F8" if is_running else SIDEBAR
+                ylo = min(cy, ty); yhi = max(cy, ty)
+                ax.plot([gx, gx], [ylo, yhi], color=ec, lw=2.0, zorder=2)
+
+                if gk == "CNOT":
+                    ax.plot(gx, cy, 'o', color=ec, markersize=12, zorder=5)
+                    ax.plot(gx, cy, 'o', color=BG, markersize=5, zorder=6)
+                    r = 0.24
+                    ax.add_patch(plt.Circle((gx, ty), r,
+                                           color=fc, ec=ec, lw=2.0, zorder=5))
+                    ax.plot([gx-r, gx+r], [ty, ty], color=ec, lw=2.0, zorder=6)
+                    ax.plot([gx, gx], [ty-r, ty+r], color=ec, lw=2.0, zorder=6)
+                elif gk == "CZ":
+                    for yy in [cy, ty]:
+                        ax.plot(gx, yy, 'o', color=ec, markersize=11, zorder=5)
+                elif gk in ("SWAP", "iSWAP"):
+                    d = 0.22
+                    for yy in [cy, ty]:
+                        ax.plot([gx-d, gx+d], [yy-d, yy+d], color=ec, lw=2.2, zorder=6)
+                        ax.plot([gx-d, gx+d], [yy+d, yy-d], color=ec, lw=2.2, zorder=6)
+                    if gk == "iSWAP":
+                        ax.text(gx + 0.3, (cy+ty)/2, "i",
+                                color=ec, fontsize=8, fontfamily="monospace")
                 else:
-                    ax.add_patch(mpatches.FancyBboxPatch((gx-0.45,ylo-0.22),0.9,yhi-ylo+0.44,
-                        boxstyle="round,pad=0.03",linewidth=1.4,edgecolor=ec,facecolor=fc,zorder=3))
-                    ax.text(gx,(cy+ty)/2+(0.1 if TQ_GATES[gk]["has_theta"] else 0),TQ_GATES[gk]["label"],
-                            color=PURPLE,fontsize=8,fontfamily="monospace",ha="center",va="center",fontweight="bold",zorder=4)
+                    bw2 = max(BW, 1.0)
+                    ax.add_patch(mpatches.FancyBboxPatch(
+                        (gx - bw2/2, ylo - 0.28), bw2, yhi - ylo + 0.56,
+                        boxstyle="round,pad=0.04", linewidth=1.6,
+                        edgecolor=ec, facecolor=fc, zorder=3))
+                    mid = (cy + ty) / 2
+                    ax.text(gx, mid + (0.12 if TQ_GATES[gk]["has_theta"] else 0),
+                            TQ_GATES[gk]["label"], color=PURPLE, fontsize=9,
+                            fontfamily="monospace", ha="center", va="center",
+                            fontweight="bold", zorder=4)
                     if TQ_GATES[gk]["has_theta"]:
-                        ax.text(gx,(cy+ty)/2-0.14,f"θ={op['theta']:.2f}",color=DIM,fontsize=6,fontfamily="monospace",ha="center",zorder=4)
+                        ax.text(gx, mid - 0.18, f"θ={op['theta']:.3f}",
+                                color=DIM, fontsize=7, fontfamily="monospace",
+                                ha="center", zorder=4)
+                # ctrl/tgt labels
+                ax.text(gx + BW/2 + 0.08, cy, "c",
+                        color=ec, fontsize=7, fontfamily="monospace", va="center")
+                ax.text(gx + BW/2 + 0.08, ty, "t",
+                        color=ec, fontsize=7, fontfamily="monospace", va="center")
+
             else:  # measurement
-                q=op["qubit"]; wy=wire_ys[q]; gk=op["gate"]
-                ec=RED; fc="#FFF0F4" if is_running else SIDEBAR
-                # meter box
-                ax.add_patch(mpatches.FancyBboxPatch((gx-0.39,wy-0.28),0.78,0.56,
-                    boxstyle="round,pad=0.03",linewidth=1.5,edgecolor=ec,facecolor=fc,zorder=3))
-                # arc inside meter
-                arc_cx,arc_cy=gx,wy-0.04
-                theta_arc=np.linspace(0,np.pi,40)
-                ax.plot(arc_cx+0.23*np.cos(theta_arc),arc_cy+0.18*np.sin(theta_arc),color=ec,lw=1.2,zorder=4)
-                ax.annotate("",xy=(arc_cx+0.19,arc_cy+0.14),xytext=(arc_cx,arc_cy),
-                            arrowprops=dict(arrowstyle="-|>",color=ec,lw=1.1),zorder=4)
-                if gk=="Mx": ax.text(gx,wy+0.22,"X",color=ec,fontsize=6,fontfamily="monospace",ha="center",va="center",zorder=5)
-                elif gk=="Reset": ax.text(gx,wy,"RST",color=ec,fontsize=6.5,fontfamily="monospace",ha="center",va="center",fontweight="bold",zorder=5)
-                # double wire after measurement
-                meas_x[q]=gx
-                ax.plot([gx+0.39,fig_w-0.3],[wy+0.05,wy+0.05],color=RED,lw=0.8,linestyle="--",zorder=2,alpha=0.5)
-                ax.plot([gx+0.39,fig_w-0.3],[wy-0.05,wy-0.05],color=RED,lw=0.8,linestyle="--",zorder=2,alpha=0.5)
+                q = op["qubit"]; wy = wire_ys[q]; gk = op["gate"]
+                ec = RED; fc = "#FFF0F4" if is_running else SIDEBAR
+                ax.add_patch(mpatches.FancyBboxPatch(
+                    (gx - BW/2, wy - BH/2 - 0.04), BW, BH + 0.08,
+                    boxstyle="round,pad=0.04", linewidth=1.8,
+                    edgecolor=ec, facecolor=fc, zorder=3))
+                arc_cx, arc_cy = gx, wy - 0.05
+                th_arc = np.linspace(0, np.pi, 50)
+                ax.plot(arc_cx + 0.26*np.cos(th_arc),
+                        arc_cy + 0.20*np.sin(th_arc),
+                        color=ec, lw=1.4, zorder=4)
+                ax.annotate("", xy=(arc_cx+0.22, arc_cy+0.17),
+                            xytext=(arc_cx, arc_cy),
+                            arrowprops=dict(arrowstyle="-|>", color=ec, lw=1.2),
+                            zorder=4)
+                if gk == "Mx":
+                    ax.text(gx, wy + 0.27, "X", color=ec, fontsize=7,
+                            fontfamily="monospace", ha="center", zorder=5)
+                elif gk == "Reset":
+                    ax.text(gx, wy, "RST", color=ec, fontsize=8,
+                            fontfamily="monospace", ha="center", va="center",
+                            fontweight="bold", zorder=5)
+                meas_x[q] = gx
+                ax.plot([gx + BW/2, fig_w - RIGHT_PAD],
+                        [wy + 0.07, wy + 0.07],
+                        color=RED, lw=1.0, linestyle="--", zorder=2, alpha=0.5)
+                ax.plot([gx + BW/2, fig_w - RIGHT_PAD],
+                        [wy - 0.07, wy - 0.07],
+                        color=RED, lw=1.0, linestyle="--", zorder=2, alpha=0.5)
+                # outcome badge
+                outcome_key = f"step{step}_q{q}"
+                if outcome_key in meas_results:
+                    ov = meas_results[outcome_key]
+                    ax.text(gx, wy - BH/2 - 0.22, f"|{ov}⟩",
+                            color=RED, fontsize=9, fontfamily="monospace",
+                            ha="center", fontweight="bold", zorder=5)
 
-            ax.text(gx,top_y+0.72,f"#{step+1}",color=DIM,fontsize=6.5,fontfamily="monospace",ha="center")
+        # Right-side qubit labels
+        for q, wy in enumerate(wire_ys):
+            ax.text(fig_w - RIGHT_PAD + 0.05, wy, f"q{q}",
+                    color=CYAN, fontsize=9, fontfamily="monospace", va="center")
 
-        for q,wy in enumerate(wire_ys):
-            ax.text(fig_w-0.2,wy,f"q{q}",color=CYAN,fontsize=9,fontfamily="monospace",va="center")
-        if is_running: ax.text(fig_w/2,-0.8,"● simulation active",color=GREEN,fontsize=8,fontfamily="monospace",ha="center")
-        if n_ops==0: ax.text(fig_w/2,top_y/2,"// add gates to build circuit",color=BORDER,fontsize=10,fontfamily="monospace",ha="center",va="center")
+        if is_running:
+            ax.text(fig_w/2, -0.95, "● simulation active",
+                    color=GREEN, fontsize=9, fontfamily="monospace", ha="center")
+        if n_ops == 0:
+            ax.text(fig_w/2, top_y/2,
+                    "// add gates to build circuit",
+                    color=BORDER, fontsize=12, fontfamily="monospace",
+                    ha="center", va="center")
         if meas_results and is_running:
-            res_str="  ".join(f"q{k.split('_q')[1]}={v}" for k,v in meas_results.items())
-            ax.text(fig_w/2,-0.55,f"// measurements: {res_str}",color=RED,fontsize=7.5,fontfamily="monospace",ha="center")
-        plt.tight_layout(pad=0.2); st.pyplot(fig,use_container_width=True); plt.close(fig)
+            res_str = "  ".join(
+                f"q{k.split('_q')[1]}={v}" for k,v in meas_results.items())
+            ax.text(fig_w/2, -0.65, f"// measurements: {res_str}",
+                    color=RED, fontsize=8, fontfamily="monospace", ha="center")
 
-        # Show measurement results if any
+        plt.tight_layout(pad=0.3)
+
+        # ── Render to PNG → base64 → scrollable HTML container ───────────
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", dpi=130,
+                    facecolor=BG, bbox_inches="tight")
+        plt.close(fig)
+        buf.seek(0)
+        img_b64 = base64.b64encode(buf.read()).decode()
+
+        # Natural pixel width of the figure
+        nat_w = int(fig_w * 130)   # dpi * inches
+        nat_h = int(fig_h * 130)
+
+        # Show in a scrollable div — scrolls horizontally when circuit is wide
+        components.html(f"""
+<div style="overflow-x:auto;overflow-y:hidden;
+            background:{BG};border:1px solid {BORDER};
+            border-radius:6px;padding:6px 4px;">
+  <img src="data:image/png;base64,{img_b64}"
+       style="height:{min(nat_h, 420)}px;width:auto;
+              max-width:none;display:block;"
+       alt="circuit diagram"/>
+</div>
+""", height=min(nat_h, 420) + 20, scrolling=False)
+
+        st.markdown(
+            f"<p style='color:{DIM};font-family:JetBrains Mono,monospace;"
+            f"font-size:0.65rem;margin-top:0.2rem'>"
+            f"// {n_ops} gate(s) · {sim_n} qubit(s)"
+            + (" · scroll horizontally to see full circuit →"
+               if fig_w * 130 > 1200 else "")
+            + "</p>", unsafe_allow_html=True)
+
+        # Measurement outcome cards
         if meas_results and is_running:
-            cols_m=st.columns(len(meas_results))
-            for ci,(k,v) in enumerate(meas_results.items()):
-                q_id=k.split('_q')[1]
-                cols_m[ci].markdown(
-                    f"<div style='background:white;border:1px solid {BORDER};border-left:4px solid {RED};"
-                    f"border-radius:4px;padding:0.4rem 0.7rem;font-family:JetBrains Mono,monospace;text-align:center'>"
-                    f"<div style='color:{DIM};font-size:0.58rem;letter-spacing:1px'>q{q_id} outcome</div>"
-                    f"<div style='color:{RED};font-size:1.4rem;font-weight:700'>|{v}⟩</div></div>",
+            cols_m = st.columns(min(len(meas_results), 6))
+            for ci, (k, v) in enumerate(meas_results.items()):
+                q_id = k.split('_q')[1]
+                cols_m[ci % len(cols_m)].markdown(
+                    f"<div style='background:white;border:1px solid {BORDER};"
+                    f"border-left:4px solid {RED};border-radius:4px;"
+                    f"padding:0.4rem 0.7rem;font-family:JetBrains Mono,monospace;"
+                    f"text-align:center'>"
+                    f"<div style='color:{DIM};font-size:0.58rem;letter-spacing:1px'>"
+                    f"q{q_id} outcome</div>"
+                    f"<div style='color:{RED};font-size:1.4rem;font-weight:700'>"
+                    f"|{v}⟩</div></div>",
                     unsafe_allow_html=True)
 
     # ── Tab 2: Probabilities ──────────────────────────────────────────────
