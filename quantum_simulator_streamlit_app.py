@@ -1038,113 +1038,344 @@ with col_main:
             else:
                 history,m0,m1,corrections,fidelity,rho2,a_res,b_res=st.session_state.tele_history
 
-            st.markdown(f"<div class='vsc-section'>Protocol execution — step by step</div>",unsafe_allow_html=True)
+            # ── 1. Full annotated circuit diagram ───────────────────────
+            st.markdown(
+                f"<div class='vsc-section'>Teleportation circuit — labeled stages</div>",
+                unsafe_allow_html=True)
 
-            # Step-by-step circuit diagram
-            steps_labels=["Initial |ψ⟩⊗|00⟩","H on q1","CNOT q1→q2\n(Bell pair)",
-                          "CNOT q0→q1\n(Alice encodes)","H on q0\n(Alice encodes)",
-                          f"Measure\nq0={m0}, q1={m1}",
-                          "Corrections\non q2"]
-            fig_tele,axes_tele=plt.subplots(1,len(history),figsize=(14,3.5))
-            fig_tele.patch.set_facecolor(BG)
-            if len(history)==1: axes_tele=[axes_tele]
-            for ai,(ax_t,(lbl,st_h)) in enumerate(zip(axes_tele,history)):
-                ax_t.set_facecolor(SIDEBAR if ai<len(history)-1 else "#EAF5EA")
-                probs_h=np.abs(st_h)**2
-                basis_3=["000","001","010","011","100","101","110","111"]
-                colors_h=[GREEN if i==np.argmax(probs_h) else CYAN for i in range(8)]
-                bars_h=ax_t.bar(range(8),probs_h,color=colors_h,edgecolor=BORDER,linewidth=0.5,width=0.7)
-                ax_t.set_ylim(0,1.05)
+            fig_circ, ax_circ = plt.subplots(figsize=(14, 4.2))
+            fig_circ.patch.set_facecolor(BG); ax_circ.set_facecolor(BG)
+            ax_circ.axis("off")
+            ax_circ.set_xlim(0, 14); ax_circ.set_ylim(-1.6, 3.8)
+
+            # Wire positions: q0=top, q1=mid, q2=bottom
+            wy = {0: 3.0, 1: 1.8, 2: 0.6}
+            wire_labels = {0:"q0  (Alice — state to send)",
+                           1:"q1  (Alice — Bell pair half)",
+                           2:"q2  (Bob  — Bell pair half)"}
+            init_labels = {0:f"|ψ⟩ = ({a_res.real:+.3f})|0⟩+({b_res.real:+.3f})|1⟩",
+                           1:"|0⟩", 2:"|0⟩"}
+
+            for q in [0,1,2]:
+                ax_circ.plot([1.0, 13.5],[wy[q],wy[q]], color=BORDER, lw=1.6, zorder=1)
+                ax_circ.text(0.08, wy[q], wire_labels[q],
+                             color=CYAN, fontsize=7.5, fontfamily="monospace",
+                             va="center", ha="left", fontweight="bold")
+                ax_circ.text(1.05, wy[q]+0.22, init_labels[q],
+                             color=DIM, fontsize=6.5, fontfamily="monospace")
+
+            def draw_box(ax, x, q, label, ec, fc, sub=""):
+                w,h=0.7,0.5
+                ax.add_patch(mpatches.FancyBboxPatch(
+                    (x-w/2, wy[q]-h/2), w, h,
+                    boxstyle="round,pad=0.03", linewidth=1.4,
+                    edgecolor=ec, facecolor=fc, zorder=3))
+                ax.text(x, wy[q]+(0.08 if sub else 0), label,
+                        color=YELLOW, fontsize=8, fontfamily="monospace",
+                        ha="center", va="center", fontweight="bold", zorder=4)
+                if sub:
+                    ax.text(x, wy[q]-0.13, sub, color=DIM,
+                            fontsize=5.5, fontfamily="monospace", ha="center", zorder=4)
+
+            def draw_cnot(ax, x, ctrl, tgt):
+                ax.plot([x,x],[wy[ctrl],wy[tgt]], color=PURPLE, lw=1.6, zorder=2)
+                ax.plot(x,wy[ctrl],'o', color=PURPLE, markersize=9, zorder=5)
+                ax.plot(x,wy[ctrl],'o', color=BG, markersize=3.5, zorder=6)
+                r=0.17
+                ax.add_patch(plt.Circle((x,wy[tgt]),r,color="#F0E8F8",ec=PURPLE,lw=1.6,zorder=5))
+                ax.plot([x-r,x+r],[wy[tgt],wy[tgt]], color=PURPLE, lw=1.6, zorder=6)
+                ax.plot([x,x],[wy[tgt]-r,wy[tgt]+r], color=PURPLE, lw=1.6, zorder=6)
+
+            def draw_measure(ax, x, q, outcome=None):
+                w,h=0.7,0.52
+                ax.add_patch(mpatches.FancyBboxPatch(
+                    (x-w/2, wy[q]-h/2), w, h,
+                    boxstyle="round,pad=0.03", linewidth=1.5,
+                    edgecolor=RED, facecolor="#FFF0F4", zorder=3))
+                arc_cx,arc_cy=x,wy[q]-0.04
+                th_arc=np.linspace(0,np.pi,40)
+                ax.plot(arc_cx+0.2*np.cos(th_arc),arc_cy+0.16*np.sin(th_arc),
+                        color=RED, lw=1.2, zorder=4)
+                ax.annotate("",xy=(arc_cx+0.17,arc_cy+0.13),xytext=(arc_cx,arc_cy),
+                            arrowprops=dict(arrowstyle="-|>",color=RED,lw=1.0),zorder=4)
+                if outcome is not None:
+                    ax.text(x, wy[q]+0.26, f"={outcome}",
+                            color=RED, fontsize=7, fontfamily="monospace",
+                            ha="center", fontweight="bold", zorder=5)
+
+            def draw_classical(ax, x_start, x_end, q, label=""):
+                y=wy[q]
+                ax.plot([x_start, x_end],[y+0.07,y+0.07], color=RED, lw=1.2,
+                        linestyle="--", zorder=2, alpha=0.7)
+                ax.plot([x_start, x_end],[y-0.07,y-0.07], color=RED, lw=1.2,
+                        linestyle="--", zorder=2, alpha=0.7)
+                if label:
+                    ax.text((x_start+x_end)/2, y+0.22, label,
+                            color=RED, fontsize=6, fontfamily="monospace",
+                            ha="center", zorder=5)
+
+            def draw_correction(ax, x, q, gate):
+                w,h=0.6,0.46
+                ax.add_patch(mpatches.FancyBboxPatch(
+                    (x-w/2, wy[q]-h/2), w, h,
+                    boxstyle="round,pad=0.03", linewidth=1.4,
+                    edgecolor=GREEN, facecolor="#EAF5EA", zorder=3))
+                ax.text(x, wy[q], gate, color=GREEN, fontsize=9,
+                        fontfamily="monospace", ha="center", va="center",
+                        fontweight="bold", zorder=4)
+
+            # ── Stage 1: Bell State Preparation (q1,q2) ──
+            # Background shading
+            ax_circ.add_patch(mpatches.FancyBboxPatch(
+                (1.2,-0.1), 3.6, 3.6,
+                boxstyle="round,pad=0.05", linewidth=1.5,
+                edgecolor=CYAN, facecolor=f"{CYAN}08", zorder=0, linestyle="--"))
+            ax_circ.text(3.0, 3.55, "BELL STATE PREPARATION",
+                         color=CYAN, fontsize=8, fontfamily="monospace",
+                         ha="center", fontweight="bold",
+                         bbox=dict(boxstyle="round,pad=0.3", facecolor=BG,
+                                   edgecolor=CYAN, linewidth=1.2))
+
+            draw_box(ax_circ, 2.0, 1, "H", CYAN, "#E8F4FB")        # H on q1
+            draw_cnot(ax_circ, 3.2, 1, 2)                           # CNOT q1->q2
+
+            ax_circ.text(2.6, -0.55, "H → CNOT creates |Φ⁺⟩=(|00⟩+|11⟩)/√2",
+                         color=CYAN, fontsize=7, fontfamily="monospace", ha="center")
+
+            # ── Stage 2: Bell Measurement (Alice encodes + measures) ──
+            ax_circ.add_patch(mpatches.FancyBboxPatch(
+                (4.8,-0.1), 5.2, 3.6,
+                boxstyle="round,pad=0.05", linewidth=1.5,
+                edgecolor=PURPLE, facecolor=f"{PURPLE}06", zorder=0, linestyle="--"))
+            ax_circ.text(7.4, 3.55, "BELL MEASUREMENT",
+                         color=PURPLE, fontsize=8, fontfamily="monospace",
+                         ha="center", fontweight="bold",
+                         bbox=dict(boxstyle="round,pad=0.3", facecolor=BG,
+                                   edgecolor=PURPLE, linewidth=1.2))
+
+            draw_cnot(ax_circ, 5.5, 0, 1)                           # CNOT q0->q1
+            draw_box(ax_circ, 6.8, 0, "H", PURPLE, "#F0E8F8")       # H on q0
+            draw_measure(ax_circ, 8.0, 0, m0)                       # Measure q0
+            draw_measure(ax_circ, 8.0, 1, m1)                       # Measure q1
+
+            ax_circ.text(6.65, -0.55, "CNOT → H → measure ⇒ classical bits m0,m1",
+                         color=PURPLE, fontsize=7, fontfamily="monospace", ha="center")
+
+            # Classical communication lines from measurements to Bob
+            draw_classical(ax_circ, 8.35, 10.2, 0, f"m0={m0}")
+            draw_classical(ax_circ, 8.35, 10.2, 1, f"m1={m1}")
+            # Arrow down to q2
+            ax_circ.annotate("", xy=(10.2, wy[2]+0.1), xytext=(10.2, wy[1]-0.2),
+                             arrowprops=dict(arrowstyle="-|>",color=RED,lw=1.2,
+                                            linestyle="dashed"))
+            ax_circ.text(10.5, (wy[1]+wy[2])/2, "classical\nchannel",
+                         color=RED, fontsize=6, fontfamily="monospace",
+                         ha="left", va="center")
+
+            # ── Stage 3: Bob's corrections ──
+            ax_circ.add_patch(mpatches.FancyBboxPatch(
+                (10.8,-0.1), 2.6, 3.6,
+                boxstyle="round,pad=0.05", linewidth=1.5,
+                edgecolor=GREEN, facecolor=f"{GREEN}06", zorder=0, linestyle="--"))
+            ax_circ.text(12.1, 3.55, "BOB'S CORRECTIONS",
+                         color=GREEN, fontsize=8, fontfamily="monospace",
+                         ha="center", fontweight="bold",
+                         bbox=dict(boxstyle="round,pad=0.3", facecolor=BG,
+                                   edgecolor=GREEN, linewidth=1.2))
+
+            cx=11.4
+            if m1==1:
+                draw_correction(ax_circ, cx, 2, "X")
+                cx+=0.9
+            if m0==1:
+                draw_correction(ax_circ, cx, 2, "Z")
+                cx+=0.9
+            if not corrections:
+                ax_circ.text(11.8, wy[2], "I\n(none)", color=GREEN, fontsize=8,
+                             fontfamily="monospace", ha="center", va="center", fontweight="bold")
+
+            corr_str = (", ".join(corrections)) if corrections else "none needed"
+            ax_circ.text(12.1, -0.55, f"corrections: {corr_str}",
+                         color=GREEN, fontsize=7, fontfamily="monospace", ha="center")
+
+            # Output label
+            ax_circ.text(13.6, wy[2], f"|ψ⟩",
+                         color=GREEN, fontsize=10, fontfamily="monospace",
+                         va="center", fontweight="bold")
+            ax_circ.text(13.6, wy[2]-0.28,
+                         f"F={fidelity:.3f}",
+                         color=GREEN if fidelity>0.99 else YELLOW,
+                         fontsize=6.5, fontfamily="monospace", va="center", ha="center")
+
+            plt.tight_layout(pad=0.2)
+            st.pyplot(fig_circ, use_container_width=True); plt.close(fig_circ)
+
+            # ── 2. Stage-by-stage state evolution ────────────────────────
+            st.markdown(
+                f"<div class='vsc-section'>State evolution — probability at each stage</div>",
+                unsafe_allow_html=True)
+
+            stage_groups = [
+                ("Initial\n|ψ⟩⊗|00⟩", [0], PANEL, DIM),
+                ("Bell State\nPreparation", [1,2], f"{CYAN}18", CYAN),
+                ("Bell\nMeasurement", [3,4,5], f"{PURPLE}12", PURPLE),
+                ("Bob's\nCorrections", [6], "#EAF5EA", GREEN),
+            ]
+
+            fig_ev, axes_ev = plt.subplots(1, len(history), figsize=(14, 3.4))
+            fig_ev.patch.set_facecolor(BG)
+            if len(history)==1: axes_ev=[axes_ev]
+
+            stage_bg   = [PANEL, f"{CYAN}18", f"{CYAN}18",
+                          f"{PURPLE}12", f"{PURPLE}12", f"{PURPLE}12",
+                          "#EAF5EA"]
+            stage_col  = [DIM, CYAN, CYAN, PURPLE, PURPLE, PURPLE, GREEN]
+            stage_title= ["Initial\n|ψ⟩⊗|00⟩",
+                          "Bell Prep\nH on q1",
+                          "Bell Prep\nCNOT q1→q2",
+                          "Meas\nCNOT q0→q1",
+                          "Meas\nH on q0",
+                          f"Measure\nq0={m0},q1={m1}",
+                          "Bob applies\ncorrections"]
+
+            for ai, (ax_t, (lbl, st_h)) in enumerate(zip(axes_ev, history)):
+                bg = stage_bg[ai] if ai < len(stage_bg) else PANEL
+                ax_t.set_facecolor(bg)
+                probs_h = np.abs(st_h)**2
+                basis_3 = ["|000⟩","|001⟩","|010⟩","|011⟩",
+                           "|100⟩","|101⟩","|110⟩","|111⟩"]
+                bar_c = stage_col[ai] if ai < len(stage_col) else DIM
+                # highlight dominant bar
+                colors_h = [bar_c if probs_h[i]<0.98 else GREEN
+                            for i in range(8)]
+                ax_t.bar(range(8), probs_h, color=colors_h,
+                         edgecolor=BORDER, linewidth=0.5, width=0.75)
+                ax_t.set_ylim(0, 1.08)
                 ax_t.set_xticks(range(8))
-                ax_t.set_xticklabels(basis_3,rotation=70,ha="right",fontfamily="monospace",fontsize=6,color=WHITE)
-                title_col=GREEN if ai==len(history)-1 else CYAN
-                ax_t.set_title(lbl,color=title_col,fontsize=6.5,fontfamily="monospace",pad=3,wrap=True)
-                ax_t.tick_params(colors=DIM,labelsize=6); ax_t.spines[:].set_color(BORDER)
-                if ai==0:
-                    ax_t.set_ylabel("P",color=DIM,fontsize=7,fontfamily="monospace")
-            plt.tight_layout(pad=0.3)
-            st.pyplot(fig_tele,use_container_width=True); plt.close(fig_tele)
+                ax_t.set_xticklabels(basis_3, rotation=75, ha="right",
+                                     fontfamily="monospace", fontsize=5.5, color=WHITE)
+                title_txt = stage_title[ai] if ai < len(stage_title) else lbl
+                tc = stage_col[ai] if ai < len(stage_col) else DIM
+                ax_t.set_title(title_txt, color=tc, fontsize=6.5,
+                               fontfamily="monospace", pad=3,
+                               fontweight="bold" if ai in [0,2,5,6] else "normal")
+                ax_t.tick_params(colors=DIM, labelsize=5.5)
+                ax_t.spines[:].set_color(BORDER)
+                if ai == 0:
+                    ax_t.set_ylabel("P", color=DIM, fontsize=7, fontfamily="monospace")
+                # label any bar > 0.08
+                for bi, p in enumerate(probs_h):
+                    if p > 0.08:
+                        ax_t.text(bi, p+0.03, f"{p:.2f}", ha="center",
+                                  color=tc, fontsize=5, fontfamily="monospace")
 
-            # Results cards
-            st.markdown(f"<div class='vsc-section'>Results</div>",unsafe_allow_html=True)
+            # Stage band labels above
+            fig_ev.text(0.075, 0.97, "INITIAL",
+                        color=DIM, fontsize=7, fontfamily="monospace",
+                        ha="center", fontweight="bold")
+            fig_ev.text(0.30, 0.97, "► BELL STATE PREPARATION ◄",
+                        color=CYAN, fontsize=7, fontfamily="monospace",
+                        ha="center", fontweight="bold")
+            fig_ev.text(0.615, 0.97, "► BELL MEASUREMENT ◄",
+                        color=PURPLE, fontsize=7, fontfamily="monospace",
+                        ha="center", fontweight="bold")
+            fig_ev.text(0.925, 0.97, "► CORRECTIONS ◄",
+                        color=GREEN, fontsize=7, fontfamily="monospace",
+                        ha="center", fontweight="bold")
+
+            plt.tight_layout(pad=0.3, rect=[0,0,1,0.94])
+            st.pyplot(fig_ev, use_container_width=True); plt.close(fig_ev)
+
+            # ── 3. Results summary ────────────────────────────────────────
+            st.markdown(f"<div class='vsc-section'>Results</div>", unsafe_allow_html=True)
             rc1,rc2,rc3,rc4=st.columns(4)
             for col_r,label_r,val_r,col_v in zip(
                 [rc1,rc2,rc3,rc4],
-                ["Alice m0","Alice m1","Corrections","Fidelity F"],
-                [f"|{m0}⟩",f"|{m1}⟩",", ".join(corrections) if corrections else "none",f"{fidelity:.4f}"],
+                ["Alice m0 (q0 meas)","Alice m1 (q1 meas)","Bob's corrections","Fidelity F"],
+                [f"|{m0}⟩",f"|{m1}⟩",
+                 (", ".join(corrections)) if corrections else "none",
+                 f"{fidelity:.4f}"],
                 [RED,RED,ORANGE,GREEN if fidelity>0.99 else YELLOW]):
                 col_r.markdown(
                     f"<div style='background:{PANEL};border:1px solid {BORDER};"
                     f"border-left:3px solid {col_v};border-radius:4px;"
                     f"padding:0.5rem 0.75rem;font-family:JetBrains Mono,monospace'>"
-                    f"<div style='color:{DIM};font-size:0.58rem;letter-spacing:1.2px;text-transform:uppercase'>{label_r}</div>"
+                    f"<div style='color:{DIM};font-size:0.58rem;letter-spacing:1.2px;"
+                    f"text-transform:uppercase'>{label_r}</div>"
                     f"<div style='color:{col_v};font-size:1.1rem;font-weight:700'>{val_r}</div>"
                     f"</div>",unsafe_allow_html=True)
 
-            # Compare input vs output state
-            st.markdown(f"<div class='vsc-section'>State comparison — input vs Bob's received state</div>",
-                        unsafe_allow_html=True)
-            fig_comp,axes_comp=plt.subplots(1,2,figsize=(8,3.2))
+            # ── 4. Input vs output comparison ────────────────────────────
+            st.markdown(
+                f"<div class='vsc-section'>State comparison — Alice's input vs Bob's output</div>",
+                unsafe_allow_html=True)
+            fig_comp, (ax_in, ax_out) = plt.subplots(1, 2, figsize=(9, 3.2))
             fig_comp.patch.set_facecolor(BG)
-            for ax_c,state_vec,title_c,col_c in zip(
-                    axes_comp,
-                    [[abs(a_res)**2,abs(b_res)**2],[rho2[0,0].real,rho2[1,1].real]],
-                    ["Input |ψ⟩  (Alice's qubit)","Bob's q2  (after corrections)"],
-                    [PURPLE,GREEN]):
+            for ax_c, sv, title_c, col_c in zip(
+                    [ax_in, ax_out],
+                    [[abs(a_res)**2, abs(b_res)**2],
+                     [max(0,rho2[0,0].real), max(0,rho2[1,1].real)]],
+                    ["Alice's input |ψ⟩  (q0)",
+                     "Bob's output |ψ⟩  (q2 after corrections)"],
+                    [PURPLE, GREEN]):
                 ax_c.set_facecolor(SIDEBAR)
-                ax_c.bar(["P(|0⟩)","P(|1⟩)"],state_vec,color=[col_c,col_c],
-                         edgecolor=BORDER,linewidth=0.7,alpha=0.85,width=0.5)
-                for xi,(label_x,val_x) in enumerate(zip(["P(|0⟩)","P(|1⟩)"],state_vec)):
-                    ax_c.text(xi,val_x+0.02,f"{val_x:.4f}",ha="center",
-                              color=WHITE,fontsize=9,fontfamily="monospace")
-                ax_c.set_ylim(0,1.15)
-                ax_c.set_title(title_c,color=col_c,fontsize=9,fontfamily="monospace",pad=5)
-                ax_c.tick_params(colors=DIM,labelsize=8); ax_c.spines[:].set_color(BORDER)
-                ax_c.set_yticklabels([f"{v:.1f}" for v in ax_c.get_yticks()],
-                                     fontfamily="monospace",fontsize=7,color=DIM)
-            fig_comp.suptitle(f"// Teleportation fidelity F = {fidelity:.4f}",
-                              color=GREEN if fidelity>0.99 else YELLOW,
-                              fontsize=9,fontfamily="monospace",x=0.5,ha="center")
-            plt.tight_layout(pad=0.4)
-            st.pyplot(fig_comp,use_container_width=True); plt.close(fig_comp)
+                bars_c = ax_c.bar(["P(|0⟩)","P(|1⟩)"], sv,
+                                  color=[col_c,col_c], edgecolor=BORDER,
+                                  linewidth=0.8, alpha=0.85, width=0.45)
+                for xi, val_x in enumerate(sv):
+                    ax_c.text(xi, val_x+0.025, f"{val_x:.4f}",
+                              ha="center", color=WHITE, fontsize=10,
+                              fontfamily="monospace", fontweight="bold")
+                ax_c.set_ylim(0, 1.18)
+                ax_c.set_title(title_c, color=col_c, fontsize=9,
+                               fontfamily="monospace", pad=6, fontweight="bold")
+                ax_c.tick_params(colors=DIM, labelsize=8)
+                ax_c.spines[:].set_color(BORDER)
+                ax_c.set_xticklabels(["P(|0⟩)","P(|1⟩)"],
+                                     fontfamily="monospace", fontsize=9, color=WHITE)
+            fig_comp.suptitle(
+                f"Teleportation fidelity  F = {fidelity:.4f}"
+                f"  —  {'SUCCESS ✔' if fidelity>0.99 else 'check circuit'}",
+                color=GREEN if fidelity>0.99 else YELLOW,
+                fontsize=10, fontfamily="monospace", fontweight="bold")
+            plt.tight_layout(pad=0.5)
+            st.pyplot(fig_comp, use_container_width=True); plt.close(fig_comp)
 
             if fidelity>0.99:
-                st.markdown(f"<div class='tele-result'>"
-                            f"<span style='color:{GREEN};font-weight:700'>✓ Teleportation successful</span>"
-                            f"<span style='color:{DIM}'>&nbsp;—&nbsp;Bob's qubit matches Alice's original state "
-                            f"with fidelity {fidelity:.4f} ≈ 1.0</span></div>",unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='tele-result'>"
+                    f"<span style='color:{GREEN};font-weight:700'>✓ Teleportation successful</span>"
+                    f"<span style='color:{DIM}'>&nbsp;—&nbsp;Bob's q2 matches Alice's original |ψ⟩ "
+                    f"with fidelity {fidelity:.4f} ≈ 1.0. "
+                    f"Alice's qubit is destroyed (no-cloning theorem).</span></div>",
+                    unsafe_allow_html=True)
             else:
-                st.markdown(f"<div class='tele-result' style='border-left-color:{YELLOW}'>"
-                            f"<span style='color:{YELLOW};font-weight:700'>⚠ Partial fidelity {fidelity:.4f}</span>"
-                            f"<span style='color:{DIM}'>&nbsp;—&nbsp;numerical precision or intermediate measurement noise</span></div>",
-                            unsafe_allow_html=True)
+                st.markdown(
+                    f"<div class='tele-result' style='border-left-color:{YELLOW}'>"
+                    f"<span style='color:{YELLOW};font-weight:700'>⚠ Fidelity {fidelity:.4f}</span>"
+                    f"<span style='color:{DIM}'>&nbsp;—&nbsp;re-run for a different measurement outcome</span></div>",
+                    unsafe_allow_html=True)
 
             # Protocol explanation
             with st.expander("// How the protocol works — step by step explanation"):
                 st.markdown(f"""
-**Step 1 — Bell pair creation**
+**Stage 1 — Bell State Preparation**
 A Hadamard gate on q1 followed by CNOT(q1→q2) creates the maximally entangled Bell state
-|Φ⁺⟩ = (|00⟩ + |11⟩)/√2 between Alice (q1) and Bob (q2).
+|Φ⁺⟩ = (|00⟩ + |11⟩)/√2 shared between Alice (q1) and Bob (q2).
 
-**Step 2 — Alice's encoding**
-Alice applies CNOT(q0→q1) then H on q0. This entangles her qubit-to-send (q0) with her
-half of the Bell pair (q1), effectively encoding α and β into the joint system.
+**Stage 2 — Bell Measurement**
+Alice applies CNOT(q0→q1) then H on q0, entangling her qubit-to-send with her half of the Bell pair.
+She then measures both q0 and q1 in the computational basis, getting classical bits m0={m0}, m1={m1}.
 
-**Step 3 — Bell measurement**
-Alice measures both her qubits (q0, q1) in the computational basis, collapsing the 3-qubit
-state. She gets classical bits m0 and m1 (results: m0={m0}, m1={m1}).
+**Classical communication**
+Alice sends m0 and m1 to Bob over a classical channel. No FTL communication occurs.
 
-**Step 4 — Classical communication**
-Alice sends m0 and m1 to Bob over a classical channel (phone, radio, etc). This is the
-speed-of-light limit — no FTL communication occurs.
+**Stage 3 — Bob's Corrections**
+Bob applies {"X on q2 (bit flip)" if m1==1 else "no X"} and {"Z on q2 (phase flip)" if m0==1 else "no Z"}.
+Corrections applied: {(", ".join(corrections)) if corrections else "none needed"}.
 
-**Step 5 — Bob's corrections**
-Bob applies: {"X gate (bit flip) on q2" if m1==1 else "no X gate"} and
-{"Z gate (phase flip) on q2" if m0==1 else "no Z gate"} based on Alice's bits.
-After corrections: {", ".join(corrections) if corrections else "no corrections were needed"}.
-
-**Result:** Bob's q2 is now in state |ψ⟩ = ({a_res.real:+.3f}{a_res.imag:+.3f}i)|0⟩ + ({b_res.real:+.3f}{b_res.imag:+.3f}i)|1⟩ — identical to Alice's original.
-Alice's original qubit is destroyed (no-cloning theorem is satisfied). Fidelity = **{fidelity:.4f}**.
+**Result:** Bob's q2 is now |{a_res.real:+.3f}+{a_res.imag:+.3f}i⟩|0⟩ + |{b_res.real:+.3f}+{b_res.imag:+.3f}i⟩|1⟩ — Alice's original state.
+Fidelity F = **{fidelity:.4f}** (1.0 = perfect teleportation).
 """)
 
 # ─────────────────────────────────────────────────────────────────────────────
