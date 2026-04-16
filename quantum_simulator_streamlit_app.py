@@ -664,6 +664,144 @@ with col_ctrl:
                     f"<div class='vsc-card-sub'>dim = 2<sup>{n}</sup> = {2**n}</div></div>",
                     unsafe_allow_html=True)
 
+    # ── Code Input ────────────────────────────────────────────────────────
+    st.markdown(f"<div class='vsc-section'>Code input</div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='background:{SIDEBAR};border:1.5px solid {BORDER};"
+        f"border-top:3px solid {YELLOW};border-radius:6px;"
+        f"padding:0.75rem 1rem 0.8rem 1rem;margin-bottom:0.5rem'>"
+        f"<div style='font-family:JetBrains Mono,monospace;font-size:0.62rem;"
+        f"letter-spacing:2px;text-transform:uppercase;color:{YELLOW};"
+        f"margin-bottom:0.45rem;font-weight:600'>&lt;/&gt; Script editor</div>"
+        f"<div style='color:{DIM};font-family:JetBrains Mono,monospace;"
+        f"font-size:0.62rem;line-height:1.6;margin-bottom:0.4rem'>"
+        f"One gate per line. Supported formats:<br>"
+        f"<span style='color:{CYAN}'>type sq gate H qubit 0</span><br>"
+        f"<span style='color:{CYAN}'>type sq gate Rx qubit 1 theta 1.5708</span><br>"
+        f"<span style='color:{PURPLE}'>type tq gate CNOT ctrl 0 tgt 1</span><br>"
+        f"<span style='color:{RED}'>type meas gate M qubit 0</span>"
+        f"</div></div>",
+        unsafe_allow_html=True)
+
+    code_text = st.text_area(
+        "Circuit code", height=180,
+        placeholder=(
+            "type sq gate H qubit 0\n"
+            "type sq gate H qubit 1\n"
+            "type tq gate CNOT ctrl 0 tgt 1\n"
+            "type sq gate Rx qubit 0 theta 1.5708\n"
+            "type meas gate M qubit 0"
+        ),
+        label_visibility="collapsed",
+        key="code_input_area",
+        disabled=disabled)
+
+    def parse_gate_script(text, max_q):
+        """Parse the text script into gate_list ops. Returns (ops, errors)."""
+        ops = []; errors = []
+        SQ_VALID  = set(SQ_GATES.keys())
+        TQ_VALID  = set(TQ_GATES.keys())
+        MEA_VALID = set(MEAS_GATES.keys())
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#"): continue
+            # Tokenise — split on whitespace, strip quotes
+            toks = [t.strip().strip('"').strip("'") for t in line.split()]
+            kv = {}
+            i = 0
+            while i < len(toks) - 1:
+                kv[toks[i].lower()] = toks[i+1]
+                i += 2
+            gtype = kv.get("type","").lower()
+            gate  = kv.get("gate","")
+            try:
+                if gtype == "sq":
+                    if gate not in SQ_VALID:
+                        errors.append(f"Unknown SQ gate '{gate}' — {line[:50]}"); continue
+                    qubit = int(kv.get("qubit", kv.get("q","0")))
+                    theta = float(kv.get("theta","0.0"))
+                    if qubit >= max_q:
+                        errors.append(f"Qubit {qubit} out of range (max {max_q-1}) — {line[:50]}"); continue
+                    ops.append({"type":"sq","gate":gate,"qubit":qubit,"theta":theta})
+                elif gtype == "tq":
+                    if gate not in TQ_VALID:
+                        errors.append(f"Unknown TQ gate '{gate}' — {line[:50]}"); continue
+                    ctrl = int(kv.get("ctrl","0"))
+                    tgt  = int(kv.get("tgt",kv.get("target","1")))
+                    theta = float(kv.get("theta","0.0"))
+                    if ctrl >= max_q or tgt >= max_q:
+                        errors.append(f"Qubit out of range — {line[:50]}"); continue
+                    if ctrl == tgt:
+                        errors.append(f"ctrl == tgt ({ctrl}) — {line[:50]}"); continue
+                    ops.append({"type":"tq","gate":gate,"ctrl":ctrl,"tgt":tgt,"theta":theta})
+                elif gtype == "meas":
+                    if gate not in MEA_VALID:
+                        errors.append(f"Unknown meas gate '{gate}' — {line[:50]}"); continue
+                    qubit = int(kv.get("qubit",kv.get("q","0")))
+                    if qubit >= max_q:
+                        errors.append(f"Qubit {qubit} out of range — {line[:50]}"); continue
+                    ops.append({"type":"meas","gate":gate,"qubit":qubit})
+                else:
+                    errors.append(f"Unknown type '{gtype}' (use sq/tq/meas) — {line[:50]}")
+            except (ValueError, KeyError) as e:
+                errors.append(f"Parse error: {e} — {line[:50]}")
+        return ops, errors
+
+    code_col1, code_col2 = st.columns(2)
+    with code_col1:
+        st.markdown("<div class='action-btn'>", unsafe_allow_html=True)
+        if st.button("▶  LOAD SCRIPT", disabled=disabled, key="load_script_btn"):
+            if code_text and code_text.strip():
+                parsed_ops, parse_errors = parse_gate_script(code_text, n)
+                if parse_errors:
+                    for err in parse_errors:
+                        st.error(f"⚠ {err}", icon=None)
+                if parsed_ops:
+                    st.session_state.gate_list = parsed_ops
+                    st.success(f"✓ Loaded {len(parsed_ops)} gate(s)")
+                    st.rerun()
+            else:
+                st.warning("// empty script")
+        st.markdown("</div>", unsafe_allow_html=True)
+    with code_col2:
+        st.markdown("<div class='action-btn'>", unsafe_allow_html=True)
+        if st.button("⬇  EXPORT SCRIPT", key="export_script_btn"):
+            lines_out = []
+            for op in st.session_state.gate_list:
+                if op["type"] == "sq":
+                    lines_out.append(
+                        f"type sq  gate {op['gate']:<6}  qubit {op['qubit']}"
+                        + (f"  theta {op['theta']:.6f}" if SQ_GATES[op['gate']]["has_theta"] else "  theta 0.0"))
+                elif op["type"] == "tq":
+                    lines_out.append(
+                        f"type tq  gate {op['gate']:<6}  ctrl {op['ctrl']}  tgt {op['tgt']}"
+                        + (f"  theta {op['theta']:.6f}" if TQ_GATES[op['gate']]["has_theta"] else "  theta 0.0"))
+                elif op["type"] == "meas":
+                    lines_out.append(f"type meas  gate {op['gate']:<6}  qubit {op['qubit']}")
+            script_str = "\n".join(lines_out) if lines_out else "# no gates"
+            st.download_button("⬇ .txt", data=script_str,
+                file_name="circuit_script.txt", mime="text/plain",
+                key="dl_script_btn")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # Live parse preview
+    if code_text and code_text.strip() and not disabled:
+        _preview_ops, _preview_errs = parse_gate_script(code_text, n)
+        _ok = len(_preview_ops); _bad = len(_preview_errs)
+        _col = GREEN if _bad == 0 and _ok > 0 else (ORANGE if _bad > 0 else DIM)
+        st.markdown(
+            f"<p style='font-family:JetBrains Mono,monospace;font-size:0.65rem;"
+            f"color:{_col};margin-top:0.15rem'>"
+            f"// parsed: {_ok} gate(s)"
+            + (f" · {_bad} error(s)" if _bad else "") + "</p>",
+            unsafe_allow_html=True)
+        if _preview_errs:
+            for _e in _preview_errs[:3]:
+                st.markdown(
+                    f"<p style='font-family:JetBrains Mono,monospace;font-size:0.62rem;"
+                    f"color:{RED};margin:0.1rem 0'>⚠ {_e}</p>",
+                    unsafe_allow_html=True)
+
     # ── Notes ─────────────────────────────────────────────────────────────
     st.markdown(f"<div class='notes-panel'><div class='notes-panel-title'>📝 Notes</div>",
                 unsafe_allow_html=True)
