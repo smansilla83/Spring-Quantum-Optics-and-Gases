@@ -82,6 +82,10 @@ st.markdown(f"""
   div[data-testid="stTextArea"] label{{color:{WHITE}!important;font-family:'JetBrains Mono',monospace!important;font-size:0.72rem!important}}
   div[data-testid="stTextArea"] textarea{{background:{PANEL}!important;border:1px solid {BORDER}!important;border-radius:4px!important;color:{WHITE}!important;font-family:'JetBrains Mono',monospace!important;font-size:0.8rem!important;resize:vertical!important}}
   div[data-testid="stTextInput"] label{{color:{WHITE}!important;font-family:'JetBrains Mono',monospace!important;font-size:0.72rem!important}}
+  div[data-testid="stNumberInput"] label{{color:{WHITE}!important;font-family:'JetBrains Mono',monospace!important;font-size:0.72rem!important}}
+  div[data-testid="stNumberInput"] input{{background:{PANEL}!important;border:1px solid {BORDER}!important;border-radius:4px!important;color:{YELLOW}!important;font-family:'JetBrains Mono',monospace!important;font-size:0.88rem!important;font-weight:600!important}}
+  div[data-testid="stNumberInput"] div[data-testid="stNumberInputStepDown"] button,
+  div[data-testid="stNumberInput"] div[data-testid="stNumberInputStepUp"] button{{width:auto!important;padding:0.2rem 0.4rem!important;font-size:0.7rem!important;border:1px solid {BORDER}!important;color:{DIM}!important}}
   div[data-testid="stTextInput"] input{{background:{PANEL}!important;border:1px solid {BORDER}!important;border-radius:4px!important;color:{WHITE}!important;font-family:'JetBrains Mono',monospace!important;font-size:0.82rem!important}}
 </style>
 """, unsafe_allow_html=True)
@@ -442,10 +446,32 @@ with col_ctrl:
             format_func=lambda x:f"q{x}",disabled=disabled,key="add_sq_qubit")
         add_theta=0.0
         if SQ_GATES[add_gate]["has_theta"]:
-            add_theta=st.slider("θ",0.0,2*np.pi,np.pi,0.05,format="%.2f",
-                disabled=disabled,key="add_sq_theta")
             st.markdown(f"<p style='color:{DIM};font-family:JetBrains Mono,monospace;"
-                        f"font-size:0.68rem;margin-top:-6px'>{add_theta:.4f} rad = {add_theta/np.pi:.3f}π</p>",
+                        f"font-size:0.62rem;margin-bottom:0.15rem;letter-spacing:1px'>"
+                        f"rotation angle (radians)</p>", unsafe_allow_html=True)
+            if "sq_theta_val" not in st.session_state:
+                st.session_state.sq_theta_val = np.pi
+            _presets_sq = [("0", 0.0), ("π/6", np.pi/6), ("π/4", np.pi/4),
+                           ("π/3", np.pi/3), ("π/2", np.pi/2), ("π", np.pi),
+                           ("3π/2", 3*np.pi/2), ("2π", 2*np.pi)]
+            _pcols = st.columns(len(_presets_sq))
+            for _pc, (_pl, _pv) in zip(_pcols, _presets_sq):
+                _active = abs(st.session_state.sq_theta_val - _pv) < 1e-9
+                if _pc.button(_pl, key=f"sq_pre_{_pl}", disabled=disabled,
+                              help=f"{_pv:.6f} rad"):
+                    st.session_state.sq_theta_val = _pv; st.rerun()
+            add_theta = st.number_input(
+                "theta_sq", min_value=-4*float(np.pi), max_value=4*float(np.pi),
+                value=float(st.session_state.sq_theta_val),
+                step=0.001, format="%.6f",
+                disabled=disabled, key="add_sq_theta",
+                label_visibility="collapsed")
+            st.session_state.sq_theta_val = add_theta
+            _frac = add_theta / np.pi
+            st.markdown(f"<p style='color:{CYAN};font-family:JetBrains Mono,monospace;"
+                        f"font-size:0.68rem;margin-top:-2px'>"
+                        f"{add_theta:.6f} rad &nbsp;=&nbsp; {_frac:.4f}\u03c0"
+                        f" &nbsp;=&nbsp; {float(np.degrees(add_theta)):.3f}\u00b0</p>",
                         unsafe_allow_html=True)
         else:
             st.markdown(f"<p style='color:{BORDER};font-family:JetBrains Mono,monospace;"
@@ -480,10 +506,32 @@ with col_ctrl:
                 format_func=lambda x:f"q{x}",disabled=disabled,key="add_tq_tgt")
         add_theta2=0.0
         if TQ_GATES[add_tq]["has_theta"]:
-            add_theta2=st.slider("θ",0.0,2*np.pi,np.pi,0.05,format="%.2f",
-                disabled=disabled,key="add_tq_theta")
             st.markdown(f"<p style='color:{DIM};font-family:JetBrains Mono,monospace;"
-                        f"font-size:0.68rem;margin-top:-6px'>{add_theta2:.4f} rad = {add_theta2/np.pi:.3f}π</p>",
+                        f"font-size:0.62rem;margin-bottom:0.15rem;letter-spacing:1px'>"
+                        f"rotation angle (radians)</p>", unsafe_allow_html=True)
+            if "tq_theta_val" not in st.session_state:
+                st.session_state.tq_theta_val = np.pi
+            _presets_tq = [("0", 0.0), ("π/6", np.pi/6), ("π/4", np.pi/4),
+                           ("π/3", np.pi/3), ("π/2", np.pi/2), ("π", np.pi),
+                           ("3π/2", 3*np.pi/2), ("2π", 2*np.pi)]
+            _pcols2 = st.columns(len(_presets_tq))
+            for _pc2, (_pl2, _pv2) in zip(_pcols2, _presets_tq):
+                _active2 = abs(st.session_state.tq_theta_val - _pv2) < 1e-9
+                if _pc2.button(_pl2, key=f"tq_pre_{_pl2}", disabled=disabled,
+                               help=f"{_pv2:.6f} rad"):
+                    st.session_state.tq_theta_val = _pv2; st.rerun()
+            add_theta2 = st.number_input(
+                "theta_tq", min_value=-4*float(np.pi), max_value=4*float(np.pi),
+                value=float(st.session_state.tq_theta_val),
+                step=0.001, format="%.6f",
+                disabled=disabled, key="add_tq_theta",
+                label_visibility="collapsed")
+            st.session_state.tq_theta_val = add_theta2
+            _frac2 = add_theta2 / np.pi
+            st.markdown(f"<p style='color:{PURPLE};font-family:JetBrains Mono,monospace;"
+                        f"font-size:0.68rem;margin-top:-2px'>"
+                        f"{add_theta2:.6f} rad &nbsp;=&nbsp; {_frac2:.4f}\u03c0"
+                        f" &nbsp;=&nbsp; {float(np.degrees(add_theta2)):.3f}\u00b0</p>",
                         unsafe_allow_html=True)
         else:
             st.markdown(f"<p style='color:{BORDER};font-family:JetBrains Mono,monospace;"
@@ -844,10 +892,30 @@ with col_main:
                 }
                 alpha_val,beta_val=preset_map[preset]
             else:
-                tele_theta=st.slider("Bloch polar angle θ",0.0,np.pi,np.pi/3,0.05,
-                    key="tele_theta",format="%.2f")
-                tele_phi=st.slider("Bloch azimuth φ",0.0,2*np.pi,0.0,0.05,
-                    key="tele_phi",format="%.2f")
+                st.markdown("<p style='color:#6E6E6E;font-family:JetBrains Mono,monospace;"
+                            "font-size:0.62rem;margin-bottom:0.1rem'>"
+                            "polar angle θ (0 = |0⟩, π = |1⟩)</p>",
+                            unsafe_allow_html=True)
+                tele_theta=st.number_input(
+                    "theta_tele", min_value=0.0, max_value=float(np.pi),
+                    value=float(np.pi/3), step=0.001, format="%.6f",
+                    key="tele_theta", label_visibility="collapsed")
+                st.markdown(f"<p style='color:#6E6E6E;font-family:JetBrains Mono,monospace;"
+                            f"font-size:0.65rem;margin-top:-2px'>"
+                            f"{tele_theta:.6f} rad = {tele_theta/np.pi:.4f}π = {float(np.degrees(tele_theta)):.3f}°</p>",
+                            unsafe_allow_html=True)
+                st.markdown("<p style='color:#6E6E6E;font-family:JetBrains Mono,monospace;"
+                            "font-size:0.62rem;margin-bottom:0.1rem;margin-top:0.3rem'>"
+                            "azimuth φ (phase, 0–2π)</p>",
+                            unsafe_allow_html=True)
+                tele_phi=st.number_input(
+                    "phi_tele", min_value=0.0, max_value=float(2*np.pi),
+                    value=0.0, step=0.001, format="%.6f",
+                    key="tele_phi", label_visibility="collapsed")
+                st.markdown(f"<p style='color:#6E6E6E;font-family:JetBrains Mono,monospace;"
+                            f"font-size:0.65rem;margin-top:-2px'>"
+                            f"{tele_phi:.6f} rad = {tele_phi/np.pi:.4f}π = {float(np.degrees(tele_phi)):.3f}°</p>",
+                            unsafe_allow_html=True)
                 alpha_val=np.cos(tele_theta/2)
                 beta_val =np.exp(1j*tele_phi)*np.sin(tele_theta/2)
 
