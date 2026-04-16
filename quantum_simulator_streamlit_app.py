@@ -871,30 +871,111 @@ with col_main:
 
         tele_col1, tele_col2 = st.columns([1.2,1])
         with tele_col1:
-            tele_mode=st.radio("State input mode",
-                ["Preset states","Custom amplitudes"],
-                horizontal=True,key="tele_mode",label_visibility="collapsed")
+            # ── Mode toggle buttons ─────────────────────────────────────────
+            if "tele_mode" not in st.session_state:
+                st.session_state.tele_mode = "Preset states"
+            tele_mode = st.session_state.tele_mode
+
+            st.markdown(f"<div class='toggle-label'>Input source</div>", unsafe_allow_html=True)
+            _tm1, _tm2, _tm3 = st.columns(3)
+            with _tm1:
+                _cls1 = "sq-active" if tele_mode=="Preset states" else ""
+                st.markdown(f"<div class='{_cls1}'>", unsafe_allow_html=True)
+                if st.button("● Presets" if tele_mode=="Preset states" else "Presets",
+                             key="tele_btn_preset"):
+                    st.session_state.tele_mode="Preset states"; st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+            with _tm2:
+                _cls2 = "sq-active" if tele_mode=="Circuit q0 state" else ""
+                st.markdown(f"<div class='{_cls2}'>", unsafe_allow_html=True)
+                if st.button("● From q0" if tele_mode=="Circuit q0 state" else "From q0",
+                             key="tele_btn_q0"):
+                    st.session_state.tele_mode="Circuit q0 state"; st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+            with _tm3:
+                _cls3 = "sq-active" if tele_mode=="Custom amplitudes" else ""
+                st.markdown(f"<div class='{_cls3}'>", unsafe_allow_html=True)
+                if st.button("● Custom" if tele_mode=="Custom amplitudes" else "Custom",
+                             key="tele_btn_custom"):
+                    st.session_state.tele_mode="Custom amplitudes"; st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("<div style='height:0.3rem'></div>", unsafe_allow_html=True)
 
             if tele_mode=="Preset states":
                 preset=st.selectbox("Choose preset",
-                    ["|0⟩","  |1⟩","|+⟩  (1/√2)(|0⟩+|1⟩)",
-                     "|−⟩  (1/√2)(|0⟩−|1⟩)",
-                     "|i⟩  (1/√2)(|0⟩+i|1⟩)",
-                     "Custom 30°  cos(15°)|0⟩+sin(15°)|1⟩"],
+                    ["|0\u27e9","  |1\u27e9","|+\u27e9  (1/\u221a2)(|0\u27e9+|1\u27e9)",
+                     "|-\u27e9  (1/\u221a2)(|0\u27e9-|1\u27e9)",
+                     "|i\u27e9  (1/\u221a2)(|0\u27e9+i|1\u27e9)",
+                     "Custom 30\u00b0  cos(15\u00b0)|0\u27e9+sin(15\u00b0)|1\u27e9"],
                     key="tele_preset")
                 preset_map={
-                    "|0⟩":                       (1.0,0.0),
-                    "  |1⟩":                      (0.0,1.0),
-                    "|+⟩  (1/√2)(|0⟩+|1⟩)":     (1/np.sqrt(2),1/np.sqrt(2)),
-                    "|−⟩  (1/√2)(|0⟩−|1⟩)":     (1/np.sqrt(2),-1/np.sqrt(2)),
-                    "|i⟩  (1/√2)(|0⟩+i|1⟩)":    (1/np.sqrt(2),1j/np.sqrt(2)),
-                    "Custom 30°  cos(15°)|0⟩+sin(15°)|1⟩":(np.cos(np.pi/12),np.sin(np.pi/12)),
+                    "|0\u27e9":                              (1.0, 0.0),
+                    "  |1\u27e9":                             (0.0, 1.0),
+                    "|+\u27e9  (1/\u221a2)(|0\u27e9+|1\u27e9)":  (1/np.sqrt(2), 1/np.sqrt(2)),
+                    "|-\u27e9  (1/\u221a2)(|0\u27e9-|1\u27e9)":  (1/np.sqrt(2), -1/np.sqrt(2)),
+                    "|i\u27e9  (1/\u221a2)(|0\u27e9+i|1\u27e9)": (1/np.sqrt(2), 1j/np.sqrt(2)),
+                    "Custom 30\u00b0  cos(15\u00b0)|0\u27e9+sin(15\u00b0)|1\u27e9": (np.cos(np.pi/12), np.sin(np.pi/12)),
                 }
-                alpha_val,beta_val=preset_map[preset]
-            else:
+                alpha_val, beta_val = preset_map[preset]
+
+            elif tele_mode=="Circuit q0 state":
+                # Extract q0 reduced density matrix from current circuit state
+                _N = 2**sim_n
+                _rho_q0 = np.zeros((2,2), dtype=complex)
+                for _idx in range(_N):
+                    _b0 = (_idx >> (sim_n-1-0)) & 1
+                    for _jdx in range(_N):
+                        _b02 = (_jdx >> (sim_n-1-0)) & 1
+                        _mask = ~(1 << (sim_n-1-0)) & (_N-1)
+                        if (_idx & _mask) == (_jdx & _mask):
+                            _rho_q0[_b0, _b02] += state_disp[_idx] * np.conj(state_disp[_jdx])
+                # rho = [[|alpha|^2, alpha*beta*], [alpha**beta, |beta|^2]]
+                # Reconstruct alpha,beta from rho (up to global phase)
+                _p0 = max(0.0, float(_rho_q0[0,0].real))
+                _p1 = max(0.0, float(_rho_q0[1,1].real))
+                _alpha_mag = np.sqrt(_p0)
+                _beta_mag  = np.sqrt(_p1)
+                # Phase of beta relative to alpha from off-diagonal
+                if _alpha_mag > 1e-9 and _beta_mag > 1e-9:
+                    _off = _rho_q0[0,1]  # = alpha * conj(beta)
+                    _rel_phase = np.angle(_off) * -1  # conj gives beta's phase relative to alpha
+                    alpha_val = complex(_alpha_mag)
+                    beta_val  = _beta_mag * np.exp(1j * _rel_phase)
+                elif _alpha_mag < 1e-9:
+                    alpha_val, beta_val = 0.0, 1.0
+                else:
+                    alpha_val, beta_val = 1.0, 0.0
+
+                # Show what was extracted
+                _purity = float(np.real(np.trace(_rho_q0 @ _rho_q0)))
+                _is_pure = _purity > 0.98
+                _warn_color = GREEN if _is_pure else ORANGE
+                _warn_txt = ("pure state" if _is_pure
+                             else f"mixed state (purity={_purity:.3f}) — teleportation works best on pure states")
+                st.markdown(
+                    f"<div style='background:{PANEL};border:1px solid {BORDER};"
+                    f"border-left:3px solid {_warn_color};border-radius:4px;"
+                    f"padding:0.45rem 0.75rem;margin-top:0.3rem;"
+                    f"font-family:JetBrains Mono,monospace'>"
+                    f"<div style='color:{DIM};font-size:0.6rem;letter-spacing:1.2px;"
+                    f"text-transform:uppercase;margin-bottom:0.2rem'>q0 state from circuit</div>"
+                    f"<div style='color:{_warn_color};font-size:0.75rem;font-weight:600'>"
+                    f"({float(alpha_val.real):+.4f}{float(alpha_val.imag):+.4f}i)|0\u27e9 + "
+                    f"({float(beta_val.real):+.4f}{float(beta_val.imag):+.4f}i)|1\u27e9</div>"
+                    f"<div style='color:{DIM};font-size:0.62rem;margin-top:0.15rem'>"
+                    f"purity = {_purity:.4f} \u2014 {_warn_txt}</div>"
+                    f"</div>", unsafe_allow_html=True)
+                if not is_running:
+                    st.markdown(
+                        f"<p style='color:{ORANGE};font-family:JetBrains Mono,monospace;"
+                        f"font-size:0.68rem;margin-top:0.3rem'>"
+                        f"// Run the circuit first to capture q0 state</p>",
+                        unsafe_allow_html=True)
+
+            else:  # Custom amplitudes
                 st.markdown("<p style='color:#6E6E6E;font-family:JetBrains Mono,monospace;"
                             "font-size:0.62rem;margin-bottom:0.1rem'>"
-                            "polar angle θ (0 = |0⟩, π = |1⟩)</p>",
+                            "polar angle \u03b8 (0 = |0\u27e9, \u03c0 = |1\u27e9)</p>",
                             unsafe_allow_html=True)
                 tele_theta=st.number_input(
                     "theta_tele", min_value=0.0, max_value=float(np.pi),
@@ -902,11 +983,11 @@ with col_main:
                     key="tele_theta", label_visibility="collapsed")
                 st.markdown(f"<p style='color:#6E6E6E;font-family:JetBrains Mono,monospace;"
                             f"font-size:0.65rem;margin-top:-2px'>"
-                            f"{tele_theta:.6f} rad = {tele_theta/np.pi:.4f}π = {float(np.degrees(tele_theta)):.3f}°</p>",
+                            f"{tele_theta:.6f} rad = {tele_theta/np.pi:.4f}\u03c0 = {float(np.degrees(tele_theta)):.3f}\u00b0</p>",
                             unsafe_allow_html=True)
                 st.markdown("<p style='color:#6E6E6E;font-family:JetBrains Mono,monospace;"
                             "font-size:0.62rem;margin-bottom:0.1rem;margin-top:0.3rem'>"
-                            "azimuth φ (phase, 0–2π)</p>",
+                            "azimuth \u03c6 (phase, 0\u20132\u03c0)</p>",
                             unsafe_allow_html=True)
                 tele_phi=st.number_input(
                     "phi_tele", min_value=0.0, max_value=float(2*np.pi),
@@ -914,7 +995,7 @@ with col_main:
                     key="tele_phi", label_visibility="collapsed")
                 st.markdown(f"<p style='color:#6E6E6E;font-family:JetBrains Mono,monospace;"
                             f"font-size:0.65rem;margin-top:-2px'>"
-                            f"{tele_phi:.6f} rad = {tele_phi/np.pi:.4f}π = {float(np.degrees(tele_phi)):.3f}°</p>",
+                            f"{tele_phi:.6f} rad = {tele_phi/np.pi:.4f}\u03c0 = {float(np.degrees(tele_phi)):.3f}\u00b0</p>",
                             unsafe_allow_html=True)
                 alpha_val=np.cos(tele_theta/2)
                 beta_val =np.exp(1j*tele_phi)*np.sin(tele_theta/2)
