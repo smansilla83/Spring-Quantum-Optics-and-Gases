@@ -872,53 +872,41 @@ with col_main:
         tele_col1, tele_col2 = st.columns([1.2,1])
         with tele_col1:
             # ── Mode toggle buttons ─────────────────────────────────────────
-            if "tele_mode" not in st.session_state:
-                st.session_state.tele_mode = "Preset states"
-            tele_mode = st.session_state.tele_mode
+            # Single selectbox — all modes in one dropdown, no broken toggles
+            _q0_option = "▶ From circuit q0 (current state)"
+            _preset_options = [
+                "|0⟩",
+                "|1⟩",
+                "|+⟩  (1/√2)(|0⟩+|1⟩)",
+                "|-⟩  (1/√2)(|0⟩-|1⟩)",
+                "|i⟩  (1/√2)(|0⟩+i|1⟩)",
+                "Custom 30°  cos(15°)|0⟩+sin(15°)|1⟩",
+                _q0_option,
+                "✎ Custom amplitudes (Bloch angles)",
+            ]
+            tele_preset = st.selectbox("Choose state to teleport",
+                _preset_options, key="tele_preset")
 
-            st.markdown(f"<div class='toggle-label'>Input source</div>", unsafe_allow_html=True)
-            _tm1, _tm2, _tm3 = st.columns(3)
-            with _tm1:
-                _cls1 = "sq-active" if tele_mode=="Preset states" else ""
-                st.markdown(f"<div class='{_cls1}'>", unsafe_allow_html=True)
-                if st.button("● Presets" if tele_mode=="Preset states" else "Presets",
-                             key="tele_btn_preset"):
-                    st.session_state.tele_mode="Preset states"; st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-            with _tm2:
-                _cls2 = "sq-active" if tele_mode=="Circuit q0 state" else ""
-                st.markdown(f"<div class='{_cls2}'>", unsafe_allow_html=True)
-                if st.button("● From q0" if tele_mode=="Circuit q0 state" else "From q0",
-                             key="tele_btn_q0"):
-                    st.session_state.tele_mode="Circuit q0 state"; st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-            with _tm3:
-                _cls3 = "sq-active" if tele_mode=="Custom amplitudes" else ""
-                st.markdown(f"<div class='{_cls3}'>", unsafe_allow_html=True)
-                if st.button("● Custom" if tele_mode=="Custom amplitudes" else "Custom",
-                             key="tele_btn_custom"):
-                    st.session_state.tele_mode="Custom amplitudes"; st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-            st.markdown("<div style='height:0.3rem'></div>", unsafe_allow_html=True)
+            _preset_map = {
+                "|0⟩":                              (1.0, 0.0),
+                "|1⟩":                              (0.0, 1.0),
+                "|+⟩  (1/√2)(|0⟩+|1⟩)":  (1/np.sqrt(2), 1/np.sqrt(2)),
+                "|-⟩  (1/√2)(|0⟩-|1⟩)":  (1/np.sqrt(2), -1/np.sqrt(2)),
+                "|i⟩  (1/√2)(|0⟩+i|1⟩)": (1/np.sqrt(2), 1j/np.sqrt(2)),
+                "Custom 30°  cos(15°)|0⟩+sin(15°)|1⟩": (np.cos(np.pi/12), np.sin(np.pi/12)),
+            }
 
-            if tele_mode=="Preset states":
-                preset=st.selectbox("Choose preset",
-                    ["|0\u27e9","  |1\u27e9","|+\u27e9  (1/\u221a2)(|0\u27e9+|1\u27e9)",
-                     "|-\u27e9  (1/\u221a2)(|0\u27e9-|1\u27e9)",
-                     "|i\u27e9  (1/\u221a2)(|0\u27e9+i|1\u27e9)",
-                     "Custom 30\u00b0  cos(15\u00b0)|0\u27e9+sin(15\u00b0)|1\u27e9"],
-                    key="tele_preset")
-                preset_map={
-                    "|0\u27e9":                              (1.0, 0.0),
-                    "  |1\u27e9":                             (0.0, 1.0),
-                    "|+\u27e9  (1/\u221a2)(|0\u27e9+|1\u27e9)":  (1/np.sqrt(2), 1/np.sqrt(2)),
-                    "|-\u27e9  (1/\u221a2)(|0\u27e9-|1\u27e9)":  (1/np.sqrt(2), -1/np.sqrt(2)),
-                    "|i\u27e9  (1/\u221a2)(|0\u27e9+i|1\u27e9)": (1/np.sqrt(2), 1j/np.sqrt(2)),
-                    "Custom 30\u00b0  cos(15\u00b0)|0\u27e9+sin(15\u00b0)|1\u27e9": (np.cos(np.pi/12), np.sin(np.pi/12)),
-                }
-                alpha_val, beta_val = preset_map[preset]
+            if tele_preset in _preset_map:
+                alpha_val, beta_val = _preset_map[tele_preset]
+                # Show badge for chosen state
+                st.markdown(
+                    f"<div style='background:{CYAN}0f;border:1px solid {CYAN}44;border-radius:4px;"
+                    f"padding:0.3rem 0.7rem;font-family:JetBrains Mono,monospace;font-size:0.74rem;"
+                    f"color:{CYAN};margin-top:0.2rem'>"
+                    f"Selected: <b>{tele_preset}</b></div>",
+                    unsafe_allow_html=True)
 
-            elif tele_mode=="Circuit q0 state":
+            elif tele_preset == _q0_option:
                 # Extract q0 reduced density matrix from current circuit state
                 _N = 2**sim_n
                 _rho_q0 = np.zeros((2,2), dtype=complex)
@@ -972,7 +960,7 @@ with col_main:
                         f"// Run the circuit first to capture q0 state</p>",
                         unsafe_allow_html=True)
 
-            else:  # Custom amplitudes
+            elif tele_preset == "✎ Custom amplitudes (Bloch angles)":  # Custom
                 st.markdown("<p style='color:#6E6E6E;font-family:JetBrains Mono,monospace;"
                             "font-size:0.62rem;margin-bottom:0.1rem'>"
                             "polar angle \u03b8 (0 = |0\u27e9, \u03c0 = |1\u27e9)</p>",
@@ -999,6 +987,9 @@ with col_main:
                             unsafe_allow_html=True)
                 alpha_val=np.cos(tele_theta/2)
                 beta_val =np.exp(1j*tele_phi)*np.sin(tele_theta/2)
+
+            else:
+                alpha_val, beta_val = 1.0, 0.0  # fallback
 
             # Normalize and display
             norm=np.sqrt(abs(alpha_val)**2+abs(beta_val)**2)
