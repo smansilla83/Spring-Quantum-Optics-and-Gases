@@ -654,11 +654,32 @@ with tab_zeeman:
   i.e. equal numbers of spin-up and spin-down electrons.<br><br>
   For the <b>4-site spin-½ Heisenberg ring</b> each site carries one spin-½.
   Each site is either <b>&uarr;</b> or <b>&darr;</b>, so with
-  N<sub>&uarr;</sub> = N<sub>&darr;</sub> = 2 the number of S<sub>z</sub> = 0
-  basis states is:
-  <span style="font-size:1.05rem;">
-    <b>D = C(4, 2) = 6</b>
-  </span><br><br>
+  N<sub>&uarr;</sub> = N<sub>&darr;</sub> = 2 we must count how many ways
+  to assign spin-up to exactly 2 of the 4 sites.<br><br>
+  The 4 lattice sites are <b>distinguishable</b> — each has a unique label (0, 1, 2, 3)
+  and a fixed position in space. We are choosing <em>which</em> 2 of those
+  distinguishable sites carry spin-up, so the count is given by the
+  <b>binomial coefficient</b>:
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown(r"""
+$$
+D \;=\; C(4,\,2) \;=\; \binom{4}{2} \;=\; \frac{4!}{2!\,(4-2)!} \;=\; \frac{4\times 3}{2\times 1} \;=\; 6
+$$
+""")
+
+    st.markdown(f"""
+<div class="caption-box" style="margin-top:0.4rem;margin-bottom:1rem;">
+  <b>Distinguishable or indistinguishable?</b><br>
+  The <em>sites</em> are <b>distinguishable</b> (they are fixed, labelled lattice
+  positions), so C(4, 2) correctly counts the 6 distinct spin configurations.<br>
+  The <em>electrons</em> themselves are <b>indistinguishable</b> fermions — swapping
+  two electrons produces the same physical state (up to a sign from antisymmetry).
+  In the spin-sector we absorb that antisymmetry into the choice of site labels:
+  once we specify <em>which sites</em> are spin-up, the state is fully determined
+  without any double-counting. Hence the binomial coefficient, not a multinomial or
+  permutation, gives the correct dimension D = 6.<br><br>
   These 6 states span the block of the Hamiltonian that is <em>completely unaffected
   by the external field H</em> — as proved in the next section.
 </div>
