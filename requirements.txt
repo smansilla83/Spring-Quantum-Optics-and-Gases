@@ -5,3 +5,4 @@ scipy
 pandas
 gdspy
 sympy
+plotly
