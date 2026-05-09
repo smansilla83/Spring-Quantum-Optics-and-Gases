@@ -14,12 +14,8 @@ TERRA    = "#A84E3C"
 DARK_BRN = "#4E3428"
 OFF_WHT  = "#E5E0D8"
 
-SCHEMES = {
-    "Sage & Dusty Rose":   {"even": SAGE,  "odd": ROSE,   "bond": "#9A7E60"},
-    "Amber & Slate":       {"even": AMBER, "odd": SLATE,  "bond": "#8A7050"},
-    "Terracotta & Butter": {"even": TERRA, "odd": BUTTER, "bond": "#9A8060"},
-    "Steel & Moss":        {"even": STEEL, "odd": MOSS,   "bond": "#8A7A60"},
-}
+# Fixed bipartite colour scheme (sage A / dusty-rose B)
+SCHEME = {"even": SAGE, "odd": ROSE, "bond": "#9A7E60"}
 
 # ── Theme definitions ──────────────────────────────────────────
 THEMES = {
@@ -45,7 +41,7 @@ THEMES = {
         "txt_main":  "#E5E0D8",
         "txt_mute":  "#9A8870",
         "hero_grad": "linear-gradient(135deg, #302A22 0%, #252018 100%)",
-        "accent":    AMBER,
+        "accent":    ROSE,
         "swatch_b":  "rgba(255,255,255,0.15)",
         "hover_bg":  "#302A22",
         "hover_txt": "#E5E0D8",
@@ -201,17 +197,14 @@ st.markdown(f"""
 # ── Controls ───────────────────────────────────────────────────
 st.markdown('<p class="sec-lbl">Lattice Configuration</p>', unsafe_allow_html=True)
 
-col_a, col_b, col_c, col_d = st.columns([3, 2, 1, 1])
+col_a, col_b, col_c = st.columns([4, 1, 1])
 with col_a:
     D = st.slider("Lattice dimension  D × D", min_value=2, max_value=8, value=4, step=1)
 with col_b:
-    scheme_name = st.selectbox("Colour scheme", list(SCHEMES.keys()), index=0)
-with col_c:
     show_labels = st.checkbox("Site labels", value=True)
-with col_d:
+with col_c:
     show_bonds = st.checkbox("Bonds", value=True)
 
-scheme = SCHEMES[scheme_name]
 N       = D * D
 n_bonds = 2 * D * (D - 1)
 _hval = 4 ** N
@@ -243,23 +236,18 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Legend ─────────────────────────────────────────────────────
-parts = scheme_name.split(" & ")
-lbl_A = parts[0].strip()
-lbl_B = parts[1].strip() if len(parts) > 1 else "B sublattice"
-
 st.markdown(f"""
 <div class="legend">
   <div class="legend-item">
-    <span class="swatch" style="background:{scheme['even']};"></span>
-    <span>{lbl_A} — A sublattice (row+col even)</span>
+    <span class="swatch" style="background:{SCHEME['even']};"></span>
+    <span>Sage — A sublattice (row+col even)</span>
   </div>
   <div class="legend-item">
-    <span class="swatch" style="background:{scheme['odd']};"></span>
-    <span>{lbl_B} — B sublattice (row+col odd)</span>
+    <span class="swatch" style="background:{SCHEME['odd']};"></span>
+    <span>Dusty rose — B sublattice (row+col odd)</span>
   </div>
   <div class="legend-item">
-    <span class="bond-swatch" style="background:{scheme['bond']};"></span>
+    <span class="bond-swatch" style="background:{SCHEME['bond']};"></span>
     <span>Hopping bond <em>t</em></span>
   </div>
 </div>
@@ -267,7 +255,7 @@ st.markdown(f"""
 
 
 # ── 2-D lattice figure ─────────────────────────────────────────
-def build_figure(D, scheme, T, show_labels, show_bonds):
+def build_figure(D, T, show_labels, show_bonds):
     fig = go.Figure()
 
     if show_bonds:
@@ -283,7 +271,7 @@ def build_figure(D, scheme, T, show_labels, show_bonds):
         fig.add_trace(go.Scatter(
             x=bx, y=by,
             mode="lines",
-            line=dict(color=scheme["bond"], width=3.5),
+            line=dict(color=SCHEME["bond"], width=3.5),
             hoverinfo="none",
             showlegend=False,
         ))
@@ -292,7 +280,7 @@ def build_figure(D, scheme, T, show_labels, show_bonds):
     font_size   = max(8, 18 - D)
 
     for parity, sub_label in [(0, "A"), (1, "B")]:
-        color = scheme["even"] if parity == 0 else scheme["odd"]
+        color = SCHEME["even"] if parity == 0 else SCHEME["odd"]
         sx, sy, texts, hovers = [], [], [], []
         for row in range(D):
             for col in range(D):
@@ -351,7 +339,7 @@ def build_figure(D, scheme, T, show_labels, show_bonds):
     return fig
 
 
-fig = build_figure(D, scheme, T, show_labels, show_bonds)
+fig = build_figure(D, T, show_labels, show_bonds)
 st.plotly_chart(fig, use_container_width=True)
 
 st.markdown(
