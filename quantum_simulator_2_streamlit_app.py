@@ -418,60 +418,118 @@ tbl_html = f"""
 with st.expander("States per k-sector  (each row = one value of N↑ = N↓)", expanded=True):
     st.markdown(tbl_html, unsafe_allow_html=True)
 
-# ── N = 2 example ───────────────────────────────────────────────
-with st.expander("Example: Sz = 0 states for N = 2 sites", expanded=True):
-    st.markdown(
-        f'<div class="caption-box" style="margin-bottom:0.9rem;">'
-        f'A 2-site chain (N = 2) is the simplest case. '
-        f'The Sz = 0 sector has C(4, 2) = <b>6 states</b>, grouped by '
-        f'k = N<sub>↑</sub> = N<sub>↓</sub> below. '
-        f'Each node shows the occupation of one lattice site.'
-        f'</div>',
-        unsafe_allow_html=True,
+# ── N = 2 example — Plotly lattice grid ────────────────────────
+with st.expander(
+    "Sz = 0 Example — all 6 states on a 2-site lattice  (N = 2)", expanded=True
+):
+    ex2 = list(gen_states(2))   # 6 states for 2 sites
+    SZ_STR = {0: "0", 1: "+½", 2: "−½", 3: "0"}
+
+    PW, PH   = 2.3, 1.7          # panel width / height in plot units
+    NCOLS    = 3
+    SX_OFF   = [0.48, 1.82]      # site x-offsets within a panel
+    SY       = 0.80              # site y within panel
+    MKR      = 34                # marker size (px)
+    PLOT_BG  = "#FFFFFF" if not dark_mode else "#2A2420"
+
+    # k-group background colours
+    K_BG = {
+        0: ("#F5EFE6" if not dark_mode else "#2E2820"),
+        1: ("#EBE4D8" if not dark_mode else "#272118"),
+        2: ("#F5EFE6" if not dark_mode else "#2E2820"),
+    }
+
+    fig_ex = go.Figure()
+
+    # Shaded panel backgrounds + k-labels
+    for pi, (state_idx, k_val, occ) in enumerate(ex2):
+        pcol, prow = pi % NCOLS, pi // NCOLS
+        ox, oy = pcol * PW, (1 - prow) * PH
+
+        fig_ex.add_shape(
+            type="rect",
+            x0=ox + 0.06, y0=oy + 0.04,
+            x1=ox + PW - 0.06, y1=oy + PH - 0.04,
+            fillcolor=K_BG[k_val],
+            line=dict(color=T["border"], width=0.8),
+            layer="below",
+        )
+
+        # k-label: only on the first panel of each k-group
+        prev_k = ex2[pi - 1][1] if pi > 0 else -1
+        if k_val != prev_k:
+            ck = math.comb(2, k_val)
+            fig_ex.add_annotation(
+                x=ox + 0.14, y=oy + PH - 0.10,
+                text=f"<b>k = {k_val}</b>  (N↑=N↓={k_val},  {ck}²={ck*ck} state{'s' if ck*ck!=1 else ''})",
+                showarrow=False, xanchor="left", yanchor="top",
+                font=dict(size=8.5, color=T["txt_mute"]),
+            )
+
+        sx = [ox + SX_OFF[0], ox + SX_OFF[1]]
+        sy = [oy + SY, oy + SY]
+
+        # Bond
+        fig_ex.add_trace(go.Scatter(
+            x=sx, y=sy, mode="lines",
+            line=dict(color=SCHEME["bond"], width=3),
+            hoverinfo="none", showlegend=False,
+        ))
+
+        # Sites
+        for s in range(2):
+            v = occ[s]
+            fig_ex.add_trace(go.Scatter(
+                x=[sx[s]], y=[sy[s]],
+                mode="markers+text",
+                marker=dict(size=MKR, color=BADGE_BG[v],
+                            line=dict(color=DARK_BRN, width=1.5)),
+                text=[BADGE_SYM[v]],
+                textposition="middle center",
+                textfont=dict(color=BADGE_FG[v], size=11, family="Arial Black"),
+                hovertemplate=f"<b>Site {s}: {BADGE_SYM[v]}</b><br>Sz = {SZ_STR[v]}<extra></extra>",
+                showlegend=False,
+            ))
+            # "site N" label above circle
+            fig_ex.add_annotation(
+                x=sx[s], y=sy[s] + 0.24, text=f"site {s}",
+                showarrow=False, xanchor="center",
+                font=dict(size=7.5, color=T["txt_mute"]),
+            )
+            # Sz label below circle
+            fig_ex.add_annotation(
+                x=sx[s], y=sy[s] - 0.24, text=f"Sz = {SZ_STR[v]}",
+                showarrow=False, xanchor="center",
+                font=dict(size=8, color=T["txt_main"]),
+            )
+
+        # Ket + state index at bottom of panel
+        ket = f"|{BADGE_SYM[occ[0]]}, {BADGE_SYM[occ[1]]}⟩  #{state_idx}"
+        fig_ex.add_annotation(
+            x=ox + PW / 2, y=oy + 0.13, text=ket,
+            showarrow=False, xanchor="center",
+            font=dict(size=9, color=T["txt_main"], family="Georgia"),
+        )
+
+    fig_ex.update_layout(
+        paper_bgcolor=T["page_bg"], plot_bgcolor=PLOT_BG,
+        height=300,
+        margin=dict(l=8, r=8, t=8, b=8),
+        xaxis=dict(range=[0, NCOLS * PW], showgrid=False, zeroline=False,
+                   showticklabels=False, fixedrange=True),
+        yaxis=dict(range=[0, 2 * PH], showgrid=False, zeroline=False,
+                   showticklabels=False, fixedrange=True),
+        showlegend=False,
+        hoverlabel=dict(bgcolor=T["hover_bg"], bordercolor=T["border"],
+                        font=dict(color=T["hover_txt"], size=12)),
     )
 
-    ex_states: dict = {}
-    for idx, k2, occ in gen_states(2):
-        ex_states.setdefault(k2, []).append((idx, occ))
-
-    def mini_card(state_idx, occ):
-        s0, s1 = badge_html(occ[0], size=38), badge_html(occ[1], size=38)
-        ket = f"|{BADGE_SYM[occ[0]]}, {BADGE_SYM[occ[1]]}⟩"
-        return (
-            f'<div style="display:flex;flex-direction:column;align-items:center;'
-            f'background:{T["card_bg"]};border:1px solid {T["border"]};'
-            f'border-radius:10px;padding:10px 14px;min-width:130px;">'
-            f'<div style="font-size:0.64rem;color:{T["txt_mute"]};margin-bottom:5px;">'
-            f'state {state_idx}</div>'
-            f'<div style="display:flex;align-items:center;gap:6px;">'
-            f'{s0}'
-            f'<div style="width:22px;height:2px;background:{T["border"]};flex-shrink:0;"></div>'
-            f'{s1}</div>'
-            f'<div style="font-size:0.9rem;color:{T["txt_main"]};margin-top:6px;'
-            f'font-family:Georgia,serif;">{ket}</div>'
-            f'<div style="display:flex;gap:28px;margin-top:3px;">'
-            f'<span style="font-size:0.62rem;color:{T["txt_mute"]};">site 0</span>'
-            f'<span style="font-size:0.62rem;color:{T["txt_mute"]};">site 1</span>'
-            f'</div></div>'
-        )
-
-    for k2 in sorted(ex_states):
-        ck = math.comb(2, k2)
-        st.markdown(
-            f'<div style="font-size:0.72rem;color:{T["txt_mute"]};text-transform:uppercase;'
-            f'letter-spacing:1px;border-bottom:1px solid {T["border"]};'
-            f'padding:4px 0 2px;margin:10px 0 6px;">'
-            f'k = {k2} &nbsp;(N<sub>↑</sub> = N<sub>↓</sub> = {k2})'
-            f'&ensp;&middot;&ensp; C(2,{k2})² = {ck}² = {ck*ck} state'
-            f'{"s" if ck*ck != 1 else ""}</div>',
-            unsafe_allow_html=True,
-        )
-        cards = "".join(mini_card(idx, occ) for idx, occ in ex_states[k2])
-        st.markdown(
-            f'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px;">'
-            f'{cards}</div>',
-            unsafe_allow_html=True,
-        )
+    st.plotly_chart(fig_ex, use_container_width=True)
+    st.caption(
+        "Each circle is a lattice site. Color and symbol show occupation. "
+        "Sz = ±½ per spin-½ electron; doubly-occupied (↑↓) and empty sites both contribute Sz = 0. "
+        "Shading groups states by k = N↑ = N↓."
+    )
 
 # ── Basis state visualization ──────────────────────────────────
 OCC_VAL  = {(False, False): 0, (True, False): 1,
@@ -622,3 +680,57 @@ else:
         f'</div>',
         unsafe_allow_html=True,
     )
+
+# ── Zeeman term proof ──────────────────────────────────────────
+st.markdown(
+    '<p class="sec-lbl" style="margin-top:2.2rem;">Zeeman Term on the S&#x2080; = 0 Sector</p>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(r"""
+The Zeeman term couples the total spin to an external field $B$:
+
+$$
+\hat{H}_Z \;=\; g\mu_B B \sum_i \hat{S}_i^z \;=\; g\mu_B B\;\hat{S}^z_{\text{total}},
+\qquad
+\hat{S}^z_{\text{total}} = \frac{\hbar}{2}\!\left(\hat{N}_{\uparrow} - \hat{N}_{\downarrow}\right).
+$$
+
+**Claim.** For any state $|\varphi\rangle$ in the $S_z = 0$ sector,
+$\;\hat{H}_Z|\varphi\rangle = 0$.
+
+---
+
+**Proof.**
+
+*Step 1 — basis states are eigenstates of $\hat{S}^z_\text{total}$ with eigenvalue 0.*
+
+Every basis state $|b\rangle$ in the $S_z=0$ sector was constructed with exactly
+$k$ spin-up and $k$ spin-down electrons, so $N_\uparrow = N_\downarrow = k$.
+Applying $\hat{S}^z_{\text{total}}$:
+
+$$
+\hat{S}^z_{\text{total}}\,|b\rangle
+  = \frac{\hbar}{2}(N_\uparrow - N_\downarrow)\,|b\rangle
+  = \frac{\hbar}{2}(k - k)\,|b\rangle
+  = 0.
+$$
+
+*Step 2 — linearity extends this to all of $S_z = 0$.*
+
+Any $|\varphi\rangle$ in the $S_z = 0$ sector is a superposition
+$|\varphi\rangle = \sum_b c_b\,|b\rangle$.
+By linearity of $\hat{H}_Z$:
+
+$$
+\hat{H}_Z\,|\varphi\rangle
+  = g\mu_B B \sum_b c_b\;\hat{S}^z_{\text{total}}\,|b\rangle
+  = g\mu_B B \sum_b c_b \cdot 0
+  = 0. \qquad \blacksquare
+$$
+
+**Consequence.** The Zeeman energy is identically zero for every state in the
+$S_z = 0$ sector. The field $B$ neither shifts their energies nor mixes them with
+states outside the sector — the $S_z = 0$ subspace is an *invariant eigenspace*
+of $\hat{H}_Z$ with eigenvalue $0$.
+""")
