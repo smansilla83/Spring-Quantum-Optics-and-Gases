@@ -315,6 +315,72 @@ tab_sim, tab_zeeman = st.tabs(["Hubbard Simulator", "Zeeman Analysis"])
 # TAB 1 — Hubbard Simulator
 # ══════════════════════════════════════════════════════════════
 with tab_sim:
+    # ── 3D Potential Landscape ──────────────────────────────────
+    _c_np, _c_v0 = st.columns(2)
+    with _c_np:
+        _n_part = st.slider("Number of particles", 1, 25, 12, key="vis_np")
+    with _c_v0:
+        _v0 = st.slider("Potential scale  V₀", 0.5, 4.0, 2.0, 0.1, key="vis_v0")
+
+    _G   = 5       # 5×5 lattice sites
+    _res = 140     # surface mesh resolution
+    _xs  = np.linspace(-0.5, _G - 0.5, _res)
+    _ys  = np.linspace(-0.5, _G - 0.5, _res)
+    _Xg, _Yg = np.meshgrid(_xs, _ys)
+    _Zg = -_v0 * (np.cos(2 * np.pi * _Xg) + np.cos(2 * np.pi * _Yg))
+
+    # Deterministic particle placement (fixed seed → stable under slider changes)
+    _all_sites = [(i, j) for i in range(_G) for j in range(_G)]
+    _perm      = np.random.default_rng(42).permutation(len(_all_sites))
+    _chosen    = [_all_sites[_perm[k]] for k in range(min(_n_part, len(_all_sites)))]
+    _px  = [float(s[0]) for s in _chosen]
+    _py  = [float(s[1]) for s in _chosen]
+    _pz  = [float(-_v0 * 2 + 0.12)] * len(_chosen)   # at well bottom, slightly raised
+
+    _fig3d = go.Figure()
+    _fig3d.add_trace(go.Surface(
+        x=_xs, y=_ys, z=_Zg,
+        colorscale=[
+            [0.00, '#001466'], [0.25, '#0033CC'],
+            [0.55, '#0088FF'], [0.78, '#22CCFF'],
+            [1.00, '#AAEEFF'],
+        ],
+        showscale=False,
+        lighting=dict(ambient=0.25, diffuse=0.55, specular=1.0,
+                      roughness=0.2, fresnel=0.8),
+        lightposition=dict(x=100, y=200, z=500),
+        contours=dict(
+            x=dict(show=True, color='rgba(180,230,255,0.20)', width=1),
+            y=dict(show=True, color='rgba(180,230,255,0.20)', width=1),
+        ),
+    ))
+    _fig3d.add_trace(go.Scatter3d(
+        x=_px, y=_py, z=_pz,
+        mode='markers',
+        marker=dict(
+            size=9, color='#FF2200', symbol='circle',
+            line=dict(color='#FFAA88', width=0.8),
+        ),
+        hovertemplate='Site (%{x:.0f}, %{y:.0f})<extra></extra>',
+        showlegend=False,
+    ))
+    _fig3d.update_layout(
+        paper_bgcolor='#000000',
+        scene=dict(
+            bgcolor='#000000',
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False),
+            zaxis=dict(visible=False),
+            camera=dict(eye=dict(x=1.55, y=1.55, z=1.05),
+                        up=dict(x=0, y=0, z=1)),
+            aspectmode='manual',
+            aspectratio=dict(x=1, y=1, z=0.45),
+        ),
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=480,
+    )
+    st.plotly_chart(_fig3d, use_container_width=True)
+
     st.markdown('<p class="sec-lbl">Lattice Configuration</p>', unsafe_allow_html=True)
 
     col_a, col_b, col_c = st.columns([4, 1, 1])
