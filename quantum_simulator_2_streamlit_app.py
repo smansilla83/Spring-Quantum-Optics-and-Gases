@@ -665,8 +665,97 @@ with tab_zeeman:
 </div>
 """, unsafe_allow_html=True)
 
+    # ── Section 0: Sz = 0 Subspace ─────────────────────────────
+    st.markdown('<p class="sec-lbl">1 · S<sub>z</sub> = 0 Subspace</p>',
+                unsafe_allow_html=True)
+
+    _N4 = 4
+    _dim_sz0_4 = math.comb(2 * _N4, _N4)   # C(8,4) = 70, but for spin-only: C(4,2)=6
+
+    st.markdown(f"""
+<div class="caption-box" style="margin-bottom:1rem;">
+  Restrict to states where the total spin projection
+  <b>S<sub>z</sub> = &frac12;(N<sub>&uarr;</sub> &minus; N<sub>&darr;</sub>) = 0</b>,
+  i.e. equal numbers of spin-up and spin-down electrons.<br><br>
+  For the <b>4-site spin-½ Heisenberg ring</b> each site carries one spin-½.
+  Each site is either <b>&uarr;</b> or <b>&darr;</b>, so with
+  N<sub>&uarr;</sub> = N<sub>&darr;</sub> = 2 the number of S<sub>z</sub> = 0
+  basis states is:
+  <span style="font-size:1.05rem;">
+    <b>D = C(4, 2) = 6</b>
+  </span><br><br>
+  These 6 states span the block of the Hamiltonian that is <em>completely unaffected
+  by the external field H</em> — as proved in the next section.
+</div>
+""", unsafe_allow_html=True)
+
+    with st.expander("All 6 basis states of the Sz = 0 sector (N = 4 sites)", expanded=True):
+        # Build a small visual grid of the 6 states using badge-style circles
+        _z_labels = [_spin_label(s) for s in _sz0_basis]
+        _z_sz_str  = {(1,): "↑  (Sz = +½)", (0,): "↓  (Sz = −½)"}
+
+        # Display as an HTML table: one row per state, one column per site
+        _site_cols = "".join(
+            f'<th style="padding:6px 18px;color:{T["txt_mute"]};font-size:0.78rem;'
+            f'font-weight:600;text-align:center;">Site {i}</th>'
+            for i in range(4)
+        )
+        _state_rows = ""
+        for si, state in enumerate(_sz0_basis):
+            _cells = ""
+            for spin in state:
+                _bg  = SAGE  if spin else ROSE
+                _sym = "↑"   if spin else "↓"
+                _fg  = OFF_WHT
+                _cells += (
+                    f'<td style="padding:8px 18px;text-align:center;">'
+                    f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+                    f'width:32px;height:32px;border-radius:50%;background:{_bg};'
+                    f'color:{_fg};font-size:0.95rem;font-weight:700;">{_sym}</span>'
+                    f'</td>'
+                )
+            _ket = _z_labels[si]
+            _state_rows += (
+                f'<tr style="border-bottom:1px solid {T["border"]};">'
+                f'<td style="padding:8px 14px;color:{T["txt_mute"]};font-size:0.80rem;'
+                f'text-align:center;font-family:monospace;">#{si}</td>'
+                f'{_cells}'
+                f'<td style="padding:8px 14px;color:{T["txt_main"]};font-size:0.85rem;'
+                f'text-align:center;font-family:Georgia;">{_ket}</td>'
+                f'<td style="padding:8px 14px;color:{T["txt_mute"]};font-size:0.78rem;'
+                f'text-align:center;">Sz = 0</td>'
+                f'</tr>'
+            )
+
+        _tbl = f"""
+<div style="border-radius:10px;overflow:hidden;border:1px solid {T['border']};">
+<table style="width:100%;border-collapse:collapse;background:{T['card_bg']};">
+  <thead>
+    <tr style="background:{T['card_bg']};border-bottom:2px solid {T['border']};">
+      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.78rem;font-weight:600;text-align:center;">#</th>
+      {_site_cols}
+      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.78rem;font-weight:600;text-align:center;">Ket</th>
+      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.78rem;font-weight:600;text-align:center;">Sz total</th>
+    </tr>
+  </thead>
+  <tbody>{_state_rows}</tbody>
+</table>
+</div>
+"""
+        st.markdown(_tbl, unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="caption-box" style="margin-top:0.6rem;">'
+            f'States #1 and #4 (<b>|↑↓↑↓⟩</b> and <b>|↓↑↓↑⟩</b>) are the two '
+            f'<b>Néel states</b> — every bond is antiparallel. They give the '
+            f'diagonal entry −J in the Hamiltonian matrix (Section 3). '
+            f'The remaining four are "domain-wall" states with two parallel and two '
+            f'antiparallel bonds, giving diagonal 0.'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
     # ── Section 1: Zeeman proof ─────────────────────────────────
-    st.markdown('<p class="sec-lbl">1 · Zeeman Term &nbsp; H Σ Ŝ<sup>z</sup><sub>i</sub> |φ⟩ = 0</p>',
+    st.markdown('<p class="sec-lbl">2 · Zeeman Term &nbsp; H Σ Ŝ<sup>z</sup><sub>i</sub> |φ⟩ = 0</p>',
                 unsafe_allow_html=True)
 
     with st.expander("Proof — the external field does not shift or split the Sz = 0 sector",
@@ -715,7 +804,7 @@ shifts $\mp H$ and $\mp 2H$ respectively (Section 4).
 """)
 
     # ── Section 2: 6×6 Hamiltonian ─────────────────────────────
-    st.markdown('<p class="sec-lbl">2 · Hamiltonian Construction — 6 × 6 matrix for Sz = 0</p>',
+    st.markdown('<p class="sec-lbl">3 · Hamiltonian Construction — 6 × 6 matrix for Sz = 0</p>',
                 unsafe_allow_html=True)
 
     with st.expander("6 × 6 Hamiltonian H/J in the Sz = 0 basis", expanded=True):
@@ -764,7 +853,7 @@ giving diagonal $0$.
         st.plotly_chart(fig_mat, use_container_width=True)
 
     # ── Section 3: Eigenenergies ────────────────────────────────
-    st.markdown('<p class="sec-lbl">3 · Eigenenergies and Sector Dimensions</p>',
+    st.markdown('<p class="sec-lbl">4 · Eigenenergies and Sector Dimensions</p>',
                 unsafe_allow_html=True)
 
     with st.expander("Spectrum of all Sz sectors at H = 0", expanded=True):
@@ -803,7 +892,7 @@ quantum fluctuations lower the energy by a factor of 2.
                         f'<br><code>{E2_0:.4g}</code></div>', unsafe_allow_html=True)
 
     # ── Section 4: Energy levels vs H ──────────────────────────
-    st.markdown('<p class="sec-lbl">4 · Eigenenergies and Limiting Regimes</p>',
+    st.markdown('<p class="sec-lbl">5 · Eigenenergies and Limiting Regimes</p>',
                 unsafe_allow_html=True)
 
     with st.expander("Limiting cases H = 0 and J = 0", expanded=True):
@@ -879,7 +968,7 @@ down by $H$; $S_z = +2$ shifts down by $2H$.
         st.plotly_chart(fig_e, use_container_width=True)
 
     # ── Section 5: Magnetization staircase ─────────────────────
-    st.markdown('<p class="sec-lbl">5 · Magnetization Staircase and Critical Fields H<sub>c</sub></p>',
+    st.markdown('<p class="sec-lbl">6 · Magnetization Staircase and Critical Fields H<sub>c</sub></p>',
                 unsafe_allow_html=True)
 
     with st.expander("Ground-state Sz vs H — the staircase", expanded=True):
