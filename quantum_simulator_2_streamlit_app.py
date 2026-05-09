@@ -395,69 +395,150 @@ df_breakdown = pd.DataFrame(rows)
 with st.expander("Breakdown by electron number k", expanded=True):
     st.dataframe(df_breakdown, use_container_width=True, hide_index=True)
 
-# ── Basis state listing ─────────────────────────────────────────
-SITE_SYM = {(False, False): "·", (True, False): "↑",
-            (False, True): "↓",  (True, True):  "↑↓"}
+# ── Basis state visualization ──────────────────────────────────
+OCC_VAL  = {(False, False): 0, (True, False): 1,
+            (False, True):  2, (True, True):  3}
+BADGE_BG  = ["#D8D0C4", SAGE,    ROSE,    SLATE]
+BADGE_SYM = ["·",       "↑",     "↓",     "↑↓"]
+BADGE_FG  = [DARK_BRN,  OFF_WHT, OFF_WHT, OFF_WHT]
 
-MAX_LIST_N  = 4    # show full list only for ≤ 4 sites (2×2)
-MAX_SAMPLE  = 200  # cap rows shown for slightly larger lattices
-
-if N <= MAX_LIST_N:
-    # Build complete basis
-    state_rows = []
+def gen_states(N, limit=None):
     idx = 0
     for k in range(N + 1):
-        for up_sites in combinations(range(N), k):
-            for dn_sites in combinations(range(N), k):
-                up_set, dn_set = set(up_sites), set(dn_sites)
-                row = {"#": idx}
-                for s in range(N):
-                    row[f"Site {s}"] = SITE_SYM[(s in up_set, s in dn_set)]
-                row["N↑"] = k
-                row["N↓"] = k
-                state_rows.append(row)
+        for up in combinations(range(N), k):
+            for dn in combinations(range(N), k):
+                if limit is not None and idx >= limit:
+                    return
+                u, d = set(up), set(dn)
+                yield idx, k, [OCC_VAL[(s in u, s in d)] for s in range(N)]
                 idx += 1
 
-    df_states = pd.DataFrame(state_rows)
-    with st.expander(f"All {dim_sz0} basis states  |  {D}×{D} lattice, N = {N} sites",
-                     expanded=True):
-        st.dataframe(df_states, use_container_width=True, hide_index=True)
+def badge_html(v, size=30):
+    return (f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+            f'width:{size}px;height:{size}px;border-radius:50%;background:{BADGE_BG[v]};'
+            f'color:{BADGE_FG[v]};font-size:0.80rem;font-weight:700;">{BADGE_SYM[v]}</span>')
+
+if N <= 4:
+    # ── Badge grid (all states, grouped by k) ──────────────────
+    by_k: dict = {}
+    for idx, k, occ in gen_states(N):
+        by_k.setdefault(k, []).append((idx, occ))
+
+    legend_html = "".join(
+        f'<div style="display:flex;align-items:center;gap:5px;font-size:0.78rem;'
+        f'color:{T["txt_mute"]};">'
+        f'{badge_html(v)}'
+        f'{"Empty" if v==0 else "Spin-up" if v==1 else "Spin-down" if v==2 else "Doubly occ."}'
+        f'</div>'
+        for v in range(4)
+    )
+
+    rows_html = []
+    for k in range(N + 1):
+        ck = math.comb(N, k)
+        rows_html.append(
+            f'<div style="font-size:0.72rem;color:{T["txt_mute"]};text-transform:uppercase;'
+            f'letter-spacing:1px;border-bottom:1px solid {T["border"]};'
+            f'padding:5px 0 3px;margin:10px 0 4px;">'
+            f'k = {k} &ensp;&middot;&ensp; C({N},{k})<sup>2</sup> = {ck}<sup>2</sup>'
+            f' = {ck*ck} states</div>'
+        )
+        states = by_k.get(k, [])
+        for i in range(0, len(states), 4):
+            cells = "".join(
+                f'<div style="display:flex;align-items:center;gap:3px;margin:2px 8px 2px 0;">'
+                f'<span style="font-size:0.66rem;color:{T["txt_mute"]};width:18px;'
+                f'text-align:right;flex-shrink:0;">{si}</span>'
+                + "".join(badge_html(v) for v in occ)
+                + f'</div>'
+                for si, occ in states[i:i+4]
+            )
+            rows_html.append(f'<div style="display:flex;flex-wrap:wrap;">{cells}</div>')
+
+    full_html = (
+        f'<div style="background:{T["card_bg"]};border:1px solid {T["border"]};'
+        f'border-radius:12px;padding:1rem 1.4rem;max-height:560px;overflow-y:auto;">'
+        f'<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:0.9rem;">'
+        f'{legend_html}</div>'
+        + "".join(rows_html)
+        + f'</div>'
+    )
+
+    with st.expander(
+        f"All {dim_sz0} basis states — {D}×{D} lattice, N = {N} sites", expanded=True
+    ):
+        st.markdown(full_html, unsafe_allow_html=True)
 
 elif N <= 9:
-    # Show a truncated sample
-    state_rows = []
-    idx = 0
-    for k in range(N + 1):
-        for up_sites in combinations(range(N), k):
-            for dn_sites in combinations(range(N), k):
-                if idx >= MAX_SAMPLE:
-                    break
-                up_set, dn_set = set(up_sites), set(dn_sites)
-                row = {"#": idx}
-                for s in range(N):
-                    row[f"Site {s}"] = SITE_SYM[(s in up_set, s in dn_set)]
-                row["N↑"] = k
-                row["N↓"] = k
-                state_rows.append(row)
-                idx += 1
-            if idx >= MAX_SAMPLE:
-                break
+    # ── Plotly heatmap (sampled) ────────────────────────────────
+    MAX_S = 200
+    z_data, x_labs, k_starts = [], [], {}
+    for idx, k, occ in gen_states(N, limit=MAX_S):
+        if k not in k_starts:
+            k_starts[k] = idx
+        z_data.append(occ)
+        x_labs.append(str(idx))
 
-    df_states = pd.DataFrame(state_rows)
-    with st.expander(
-        f"First {MAX_SAMPLE} of {dim_sz0:,} basis states  |  {D}×{D} lattice, N = {N} sites"
-    ):
-        st.dataframe(df_states, use_container_width=True, hide_index=True)
-        st.caption(
-            f"Showing {MAX_SAMPLE} of {dim_sz0:,} states. "
-            f"Full enumeration omitted for N = {N}."
+    z_T = [list(col) for col in zip(*z_data)]
+    custom_T = [[BADGE_SYM[v] for v in row] for row in z_T]
+
+    cs = [
+        [0.000, "#D8D0C4"], [0.249, "#D8D0C4"],
+        [0.250, SAGE],      [0.499, SAGE],
+        [0.500, ROSE],      [0.749, ROSE],
+        [0.750, SLATE],     [1.000, SLATE],
+    ]
+
+    fig_h = go.Figure(go.Heatmap(
+        z=z_T,
+        x=x_labs,
+        y=[f"Site {s}" for s in range(N)],
+        colorscale=cs, zmin=0, zmax=3, showscale=False,
+        customdata=custom_T,
+        hovertemplate="<b>State %{x}</b> · %{y}: <b>%{customdata}</b><extra></extra>",
+        xgap=1, ygap=1,
+    ))
+
+    for k, start in sorted(k_starts.items()):
+        if start > 0:
+            fig_h.add_vline(x=start - 0.5, line=dict(color=T["border"], width=1.5))
+        fig_h.add_annotation(
+            x=start + 0.3, y=1.06, text=f"k={k}",
+            xanchor="left", showarrow=False, yref="paper",
+            font=dict(color=T["txt_mute"], size=9),
         )
+
+    fig_h.update_layout(
+        paper_bgcolor=T["page_bg"], plot_bgcolor=T["plot_bg"],
+        height=50 * N + 80,
+        margin=dict(l=65, r=20, t=35, b=45),
+        xaxis=dict(
+            title=dict(text="State index", font=dict(color=T["txt_mute"], size=11)),
+            showticklabels=len(z_data) <= 40,
+            tickfont=dict(color=T["txt_mute"], size=9),
+        ),
+        yaxis=dict(tickfont=dict(color=T["txt_main"], size=10), autorange="reversed"),
+        hoverlabel=dict(
+            bgcolor=T["hover_bg"], bordercolor=T["border"],
+            font=dict(color=T["hover_txt"], size=12),
+        ),
+    )
+
+    n_shown = len(z_data)
+    label = f"First {n_shown} of {dim_sz0:,}" if n_shown < dim_sz0 else f"All {dim_sz0:,}"
+    with st.expander(
+        f"Basis states — {D}×{D} lattice  ({label} states)", expanded=True
+    ):
+        st.plotly_chart(fig_h, use_container_width=True)
+        if n_shown < dim_sz0:
+            st.caption(f"Showing first {n_shown} of {dim_sz0:,} Sz=0 states.")
+
 else:
     st.markdown(
         f'<div class="caption-box">'
-        f'For N = {N} sites the S<sub>z</sub>=0 sector contains '
-        f'<b>{dim_sz0:,}</b> states — too large to list in the browser. '
-        f'Use the breakdown table above to explore the structure by electron number <em>k</em>.'
+        f'For N = {N} sites the Sz=0 sector has <b>{dim_sz0:,}</b> states — '
+        f'too large to enumerate in the browser. '
+        f'See the breakdown table above for the structure by electron number <em>k</em>.'
         f'</div>',
         unsafe_allow_html=True,
     )
