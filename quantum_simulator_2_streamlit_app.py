@@ -418,6 +418,29 @@ tbl_html = f"""
 with st.expander("States per k-sector  (each row = one value of N↑ = N↓)", expanded=True):
     st.markdown(tbl_html, unsafe_allow_html=True)
 
+# ── Basis state visualization helpers ──────────────────────────
+OCC_VAL  = {(False, False): 0, (True, False): 1,
+            (False, True):  2, (True, True):  3}
+BADGE_BG  = ["#D8D0C4", SAGE,    ROSE,    SLATE]
+BADGE_SYM = ["·",       "↑",     "↓",     "↑↓"]
+BADGE_FG  = [DARK_BRN,  OFF_WHT, OFF_WHT, OFF_WHT]
+
+def gen_states(N, limit=None):
+    idx = 0
+    for k in range(N + 1):
+        for up in combinations(range(N), k):
+            for dn in combinations(range(N), k):
+                if limit is not None and idx >= limit:
+                    return
+                u, d = set(up), set(dn)
+                yield idx, k, [OCC_VAL[(s in u, s in d)] for s in range(N)]
+                idx += 1
+
+def badge_html(v, size=30):
+    return (f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+            f'width:{size}px;height:{size}px;border-radius:50%;background:{BADGE_BG[v]};'
+            f'color:{BADGE_FG[v]};font-size:0.80rem;font-weight:700;">{BADGE_SYM[v]}</span>')
+
 # ── N = 2 example — Plotly lattice grid ────────────────────────
 with st.expander(
     "Sz = 0 Example — all 6 states on a 2-site lattice  (N = 2)", expanded=True
@@ -531,28 +554,7 @@ with st.expander(
         "Shading groups states by k = N↑ = N↓."
     )
 
-# ── Basis state visualization ──────────────────────────────────
-OCC_VAL  = {(False, False): 0, (True, False): 1,
-            (False, True):  2, (True, True):  3}
-BADGE_BG  = ["#D8D0C4", SAGE,    ROSE,    SLATE]
-BADGE_SYM = ["·",       "↑",     "↓",     "↑↓"]
-BADGE_FG  = [DARK_BRN,  OFF_WHT, OFF_WHT, OFF_WHT]
 
-def gen_states(N, limit=None):
-    idx = 0
-    for k in range(N + 1):
-        for up in combinations(range(N), k):
-            for dn in combinations(range(N), k):
-                if limit is not None and idx >= limit:
-                    return
-                u, d = set(up), set(dn)
-                yield idx, k, [OCC_VAL[(s in u, s in d)] for s in range(N)]
-                idx += 1
-
-def badge_html(v, size=30):
-    return (f'<span style="display:inline-flex;align-items:center;justify-content:center;'
-            f'width:{size}px;height:{size}px;border-radius:50%;background:{BADGE_BG[v]};'
-            f'color:{BADGE_FG[v]};font-size:0.80rem;font-weight:700;">{BADGE_SYM[v]}</span>')
 
 if N <= 4:
     # ── Badge grid (all states, grouped by k) ──────────────────
