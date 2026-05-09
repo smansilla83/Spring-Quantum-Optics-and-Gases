@@ -371,8 +371,14 @@ st.markdown(f"""
   <b>&uarr;</b>&thinsp;(spin-up),&ensp;
   <b>&darr;</b>&thinsp;(spin-down),&ensp;or&ensp;
   <b>&uarr;&darr;</b>&thinsp;(doubly occupied).<br><br>
-  For a fixed electron number <em>k</em> per spin species, there are
-  C(N,&thinsp;k)&sup2; states.&ensp;Summing over all <em>k</em>:<br>
+  We label each sector by an integer <b>k</b>, defined as:<br>
+  &emsp;<b>k = N<sub>&uarr;</sub> = N<sub>&darr;</sub></b>
+  &ensp;&mdash;&ensp; the number of spin-up electrons,
+  which must equal the number of spin-down electrons.<br>
+  <em>k</em> ranges from 0 (all sites empty) to N (all sites doubly occupied).<br><br>
+  For a given <em>k</em> there are C(N,k) ways to place the k spin-up electrons on N sites,
+  and independently C(N,k) ways for the k spin-down electrons, giving
+  C(N,k)<sup>2</sup> states. Summing over all <em>k</em>:<br>
   <span style="font-size:1.05rem;">
     <b>D = &sum;<sub>k=0</sub><sup>N</sup> C(N,k)&sup2; = C(2N, N)
     = C({2*N},&thinsp;{N}) = {dim_sz0:,}</b>
@@ -386,13 +392,13 @@ rows = []
 for k in range(N + 1):
     c = math.comb(N, k)
     rows.append({
-        "k  (electrons per spin)": k,
-        "C(N, k)": c,
-        "C(N, k)²  =  # states": c * c,
+        "k  (= N↑ = N↓)": k,
+        "C(N, k)  —  ways to arrange k electrons of one spin": c,
+        "C(N, k)²  —  states in this k-sector": c * c,
     })
 df_breakdown = pd.DataFrame(rows)
 
-with st.expander("Breakdown by electron number k", expanded=True):
+with st.expander("States per sector k  (each row is one value of N↑ = N↓)", expanded=True):
     st.dataframe(df_breakdown, use_container_width=True, hide_index=True)
 
 # ── Basis state visualization ──────────────────────────────────
@@ -440,7 +446,8 @@ if N <= 4:
             f'<div style="font-size:0.72rem;color:{T["txt_mute"]};text-transform:uppercase;'
             f'letter-spacing:1px;border-bottom:1px solid {T["border"]};'
             f'padding:5px 0 3px;margin:10px 0 4px;">'
-            f'k = {k} &ensp;&middot;&ensp; C({N},{k})<sup>2</sup> = {ck}<sup>2</sup>'
+            f'k = {k} &ensp;(N<sub>&uarr;</sub> = N<sub>&darr;</sub> = {k})'
+            f'&ensp;&middot;&ensp; C({N},{k})<sup>2</sup> = {ck}<sup>2</sup>'
             f' = {ck*ck} states</div>'
         )
         states = by_k.get(k, [])
@@ -503,7 +510,8 @@ elif N <= 9:
         if start > 0:
             fig_h.add_vline(x=start - 0.5, line=dict(color=T["border"], width=1.5))
         fig_h.add_annotation(
-            x=start + 0.3, y=1.06, text=f"k={k}",
+            x=start + 0.3, y=1.06,
+            text=f"k={k}  (N↑=N↓={k})",
             xanchor="left", showarrow=False, yref="paper",
             font=dict(color=T["txt_mute"], size=9),
         )
