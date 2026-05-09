@@ -1,4 +1,6 @@
 import math
+from itertools import combinations
+import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
 
@@ -352,3 +354,110 @@ st.markdown(
     f'</div>',
     unsafe_allow_html=True,
 )
+
+# ── Sz = 0 Subspace ────────────────────────────────────────────
+st.markdown('<p class="sec-lbl" style="margin-top:2rem;">S<sub>z</sub> = 0 Subspace</p>',
+            unsafe_allow_html=True)
+
+dim_sz0 = math.comb(2 * N, N)
+
+# Dimension formula card
+st.markdown(f"""
+<div class="caption-box" style="margin-bottom:1rem;">
+  Restrict to states where the total spin projection
+  <b>S<sub>z</sub> = &frac12;(N<sub>&uarr;</sub> &minus; N<sub>&darr;</sub>) = 0</b>,
+  i.e. equal numbers of spin-up and spin-down electrons.<br><br>
+  Each site can be <b>&middot;</b>&thinsp;(empty),&ensp;
+  <b>&uarr;</b>&thinsp;(spin-up),&ensp;
+  <b>&darr;</b>&thinsp;(spin-down),&ensp;or&ensp;
+  <b>&uarr;&darr;</b>&thinsp;(doubly occupied).<br><br>
+  For a fixed electron number <em>k</em> per spin species, there are
+  C(N,&thinsp;k)&sup2; states.&ensp;Summing over all <em>k</em>:<br>
+  <span style="font-size:1.05rem;">
+    <b>D = &sum;<sub>k=0</sub><sup>N</sup> C(N,k)&sup2; = C(2N, N)
+    = C({2*N},&thinsp;{N}) = {dim_sz0:,}</b>
+  </span>
+  &nbsp;&nbsp;(by Vandermonde&rsquo;s identity)
+</div>
+""", unsafe_allow_html=True)
+
+# ── Breakdown table by k ────────────────────────────────────────
+rows = []
+for k in range(N + 1):
+    c = math.comb(N, k)
+    rows.append({
+        "k  (electrons per spin)": k,
+        "C(N, k)": c,
+        "C(N, k)²  =  # states": c * c,
+    })
+df_breakdown = pd.DataFrame(rows)
+
+with st.expander("Breakdown by electron number k", expanded=True):
+    st.dataframe(df_breakdown, use_container_width=True, hide_index=True)
+
+# ── Basis state listing ─────────────────────────────────────────
+SITE_SYM = {(False, False): "·", (True, False): "↑",
+            (False, True): "↓",  (True, True):  "↑↓"}
+
+MAX_LIST_N  = 4    # show full list only for ≤ 4 sites (2×2)
+MAX_SAMPLE  = 200  # cap rows shown for slightly larger lattices
+
+if N <= MAX_LIST_N:
+    # Build complete basis
+    state_rows = []
+    idx = 0
+    for k in range(N + 1):
+        for up_sites in combinations(range(N), k):
+            for dn_sites in combinations(range(N), k):
+                up_set, dn_set = set(up_sites), set(dn_sites)
+                row = {"#": idx}
+                for s in range(N):
+                    row[f"Site {s}"] = SITE_SYM[(s in up_set, s in dn_set)]
+                row["N↑"] = k
+                row["N↓"] = k
+                state_rows.append(row)
+                idx += 1
+
+    df_states = pd.DataFrame(state_rows)
+    with st.expander(f"All {dim_sz0} basis states  |  {D}×{D} lattice, N = {N} sites",
+                     expanded=True):
+        st.dataframe(df_states, use_container_width=True, hide_index=True)
+
+elif N <= 9:
+    # Show a truncated sample
+    state_rows = []
+    idx = 0
+    for k in range(N + 1):
+        for up_sites in combinations(range(N), k):
+            for dn_sites in combinations(range(N), k):
+                if idx >= MAX_SAMPLE:
+                    break
+                up_set, dn_set = set(up_sites), set(dn_sites)
+                row = {"#": idx}
+                for s in range(N):
+                    row[f"Site {s}"] = SITE_SYM[(s in up_set, s in dn_set)]
+                row["N↑"] = k
+                row["N↓"] = k
+                state_rows.append(row)
+                idx += 1
+            if idx >= MAX_SAMPLE:
+                break
+
+    df_states = pd.DataFrame(state_rows)
+    with st.expander(
+        f"First {MAX_SAMPLE} of {dim_sz0:,} basis states  |  {D}×{D} lattice, N = {N} sites"
+    ):
+        st.dataframe(df_states, use_container_width=True, hide_index=True)
+        st.caption(
+            f"Showing {MAX_SAMPLE} of {dim_sz0:,} states. "
+            f"Full enumeration omitted for N = {N}."
+        )
+else:
+    st.markdown(
+        f'<div class="caption-box">'
+        f'For N = {N} sites the S<sub>z</sub>=0 sector contains '
+        f'<b>{dim_sz0:,}</b> states — too large to list in the browser. '
+        f'Use the breakdown table above to explore the structure by electron number <em>k</em>.'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
