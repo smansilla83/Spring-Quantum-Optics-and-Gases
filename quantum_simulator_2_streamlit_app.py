@@ -387,19 +387,91 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Breakdown table by k ────────────────────────────────────────
-rows = []
-for k in range(N + 1):
-    c = math.comb(N, k)
-    rows.append({
-        "k  (= N↑ = N↓)": k,
-        "C(N, k)  —  ways to arrange k electrons of one spin": c,
-        "C(N, k)²  —  states in this k-sector": c * c,
-    })
-df_breakdown = pd.DataFrame(rows)
+# ── Breakdown table by k (white) ───────────────────────────────
+tbl_rows_html = "".join(
+    f'<tr style="border-bottom:1px solid #DDD5C8;">'
+    f'<td style="padding:9px 18px;color:#2A2018;text-align:center;">{k}</td>'
+    f'<td style="padding:9px 18px;color:#2A2018;text-align:center;">{math.comb(N,k)}</td>'
+    f'<td style="padding:9px 18px;color:#2A2018;text-align:center;font-weight:600;">'
+    f'{math.comb(N,k)**2}</td>'
+    f'</tr>'
+    for k in range(N + 1)
+)
+tbl_html = f"""
+<div style="border-radius:10px;overflow:hidden;border:1px solid #C8BDA8;margin-bottom:0.3rem;">
+<table style="width:100%;border-collapse:collapse;background:#FFFFFF;">
+  <thead>
+    <tr style="background:#F0E8DA;border-bottom:2px solid #C8BDA8;">
+      <th style="padding:10px 18px;color:#4E3428;font-size:0.82rem;font-weight:700;text-align:center;">
+        k &nbsp;=&nbsp; N<sub>↑</sub> &nbsp;=&nbsp; N<sub>↓</sub></th>
+      <th style="padding:10px 18px;color:#4E3428;font-size:0.82rem;font-weight:700;text-align:center;">
+        C(N, k) &nbsp;&mdash;&nbsp; ways to place k ↑ electrons on N sites</th>
+      <th style="padding:10px 18px;color:#4E3428;font-size:0.82rem;font-weight:700;text-align:center;">
+        C(N, k)² &nbsp;&mdash;&nbsp; states in this k-sector</th>
+    </tr>
+  </thead>
+  <tbody>{tbl_rows_html}</tbody>
+</table>
+</div>
+"""
 
-with st.expander("States per sector k  (each row is one value of N↑ = N↓)", expanded=True):
-    st.dataframe(df_breakdown, use_container_width=True, hide_index=True)
+with st.expander("States per k-sector  (each row = one value of N↑ = N↓)", expanded=True):
+    st.markdown(tbl_html, unsafe_allow_html=True)
+
+# ── N = 2 example ───────────────────────────────────────────────
+with st.expander("Example: Sz = 0 states for N = 2 sites", expanded=True):
+    st.markdown(
+        f'<div class="caption-box" style="margin-bottom:0.9rem;">'
+        f'A 2-site chain (N = 2) is the simplest case. '
+        f'The Sz = 0 sector has C(4, 2) = <b>6 states</b>, grouped by '
+        f'k = N<sub>↑</sub> = N<sub>↓</sub> below. '
+        f'Each node shows the occupation of one lattice site.'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    ex_states: dict = {}
+    for idx, k2, occ in gen_states(2):
+        ex_states.setdefault(k2, []).append((idx, occ))
+
+    def mini_card(state_idx, occ):
+        s0, s1 = badge_html(occ[0], size=38), badge_html(occ[1], size=38)
+        ket = f"|{BADGE_SYM[occ[0]]}, {BADGE_SYM[occ[1]]}⟩"
+        return (
+            f'<div style="display:flex;flex-direction:column;align-items:center;'
+            f'background:{T["card_bg"]};border:1px solid {T["border"]};'
+            f'border-radius:10px;padding:10px 14px;min-width:130px;">'
+            f'<div style="font-size:0.64rem;color:{T["txt_mute"]};margin-bottom:5px;">'
+            f'state {state_idx}</div>'
+            f'<div style="display:flex;align-items:center;gap:6px;">'
+            f'{s0}'
+            f'<div style="width:22px;height:2px;background:{T["border"]};flex-shrink:0;"></div>'
+            f'{s1}</div>'
+            f'<div style="font-size:0.9rem;color:{T["txt_main"]};margin-top:6px;'
+            f'font-family:Georgia,serif;">{ket}</div>'
+            f'<div style="display:flex;gap:28px;margin-top:3px;">'
+            f'<span style="font-size:0.62rem;color:{T["txt_mute"]};">site 0</span>'
+            f'<span style="font-size:0.62rem;color:{T["txt_mute"]};">site 1</span>'
+            f'</div></div>'
+        )
+
+    for k2 in sorted(ex_states):
+        ck = math.comb(2, k2)
+        st.markdown(
+            f'<div style="font-size:0.72rem;color:{T["txt_mute"]};text-transform:uppercase;'
+            f'letter-spacing:1px;border-bottom:1px solid {T["border"]};'
+            f'padding:4px 0 2px;margin:10px 0 6px;">'
+            f'k = {k2} &nbsp;(N<sub>↑</sub> = N<sub>↓</sub> = {k2})'
+            f'&ensp;&middot;&ensp; C(2,{k2})² = {ck}² = {ck*ck} state'
+            f'{"s" if ck*ck != 1 else ""}</div>',
+            unsafe_allow_html=True,
+        )
+        cards = "".join(mini_card(idx, occ) for idx, occ in ex_states[k2])
+        st.markdown(
+            f'<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:4px;">'
+            f'{cards}</div>',
+            unsafe_allow_html=True,
+        )
 
 # ── Basis state visualization ──────────────────────────────────
 OCC_VAL  = {(False, False): 0, (True, False): 1,
