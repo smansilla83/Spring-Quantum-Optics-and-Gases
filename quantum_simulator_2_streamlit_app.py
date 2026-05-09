@@ -294,8 +294,18 @@ _H_unit = build_heisenberg(1.0, _sz0_basis)
 def _spin_label(state):
     return "|" + "".join("↑" if s else "↓" for s in state) + "⟩"
 
-# ── Hero ───────────────────────────────────────────────────────
-st.markdown(f"""
+# ── Tabs ───────────────────────────────────────────────────────
+tab_sim, tab_zeeman = st.tabs(["Hubbard Simulator", "Zeeman Analysis"])
+
+# ══════════════════════════════════════════════════════════════
+# TAB 1 — Hubbard Simulator
+# ══════════════════════════════════════════════════════════════
+with tab_sim:
+    # placeholder renders the chart FIRST, before sliders/title
+    _fig3d_slot = st.empty()
+
+    # ── Hero title (after image) ────────────────────────────────
+    st.markdown(f"""
 <div class="hero">
   <h1>Hubbard Model Quantum Simulator</h1>
   <p>
@@ -308,58 +318,59 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Tabs ───────────────────────────────────────────────────────
-tab_sim, tab_zeeman = st.tabs(["Hubbard Simulator", "Zeeman Analysis"])
-
-# ══════════════════════════════════════════════════════════════
-# TAB 1 — Hubbard Simulator
-# ══════════════════════════════════════════════════════════════
-with tab_sim:
-    # ── 3D Potential Landscape ──────────────────────────────────
+    # ── Controls for 3D visualisation ──────────────────────────
     _c_np, _c_v0 = st.columns(2)
     with _c_np:
         _n_part = st.slider("Number of particles", 1, 25, 12, key="vis_np")
     with _c_v0:
-        _v0 = st.slider("Potential scale  V₀", 0.5, 4.0, 2.0, 0.1, key="vis_v0")
+        _v0 = st.slider("Potential scale  V₀", 0.5, 3.0, 1.5, 0.1, key="vis_v0")
 
-    _G   = 5       # 5×5 lattice sites
-    _res = 140     # surface mesh resolution
-    _xs  = np.linspace(-0.5, _G - 0.5, _res)
-    _ys  = np.linspace(-0.5, _G - 0.5, _res)
+    # ── Build 3D surface ────────────────────────────────────────
+    _G   = 5
+    _res = 220   # high res → smooth curves, no jagged edges
+    _xs  = np.linspace(-0.6, _G - 0.4, _res)
+    _ys  = np.linspace(-0.6, _G - 0.4, _res)
     _Xg, _Yg = np.meshgrid(_xs, _ys)
+    # Smooth product-of-cosines well: minima at integer sites
     _Zg = -_v0 * (np.cos(2 * np.pi * _Xg) + np.cos(2 * np.pi * _Yg))
 
-    # Deterministic particle placement (fixed seed → stable under slider changes)
+    # Deterministic particle placement
     _all_sites = [(i, j) for i in range(_G) for j in range(_G)]
     _perm      = np.random.default_rng(42).permutation(len(_all_sites))
     _chosen    = [_all_sites[_perm[k]] for k in range(min(_n_part, len(_all_sites)))]
     _px  = [float(s[0]) for s in _chosen]
     _py  = [float(s[1]) for s in _chosen]
-    _pz  = [float(-_v0 * 2 + 0.12)] * len(_chosen)   # at well bottom, slightly raised
+    # Place particles one-third up from well floor so they're visible from the side
+    _z_floor = -2.0 * _v0
+    _z_range =  4.0 * _v0
+    _pz  = [_z_floor + _z_range * 0.18] * len(_chosen)
 
     _fig3d = go.Figure()
     _fig3d.add_trace(go.Surface(
         x=_xs, y=_ys, z=_Zg,
         colorscale=[
-            [0.00, '#001466'], [0.25, '#0033CC'],
-            [0.55, '#0088FF'], [0.78, '#22CCFF'],
-            [1.00, '#AAEEFF'],
+            [0.00, '#000833'],
+            [0.20, '#001f99'],
+            [0.45, '#0055EE'],
+            [0.70, '#00AAFF'],
+            [0.88, '#55DDFF'],
+            [1.00, '#CCEFFF'],
         ],
         showscale=False,
-        lighting=dict(ambient=0.25, diffuse=0.55, specular=1.0,
-                      roughness=0.2, fresnel=0.8),
-        lightposition=dict(x=100, y=200, z=500),
-        contours=dict(
-            x=dict(show=True, color='rgba(180,230,255,0.20)', width=1),
-            y=dict(show=True, color='rgba(180,230,255,0.20)', width=1),
-        ),
+        # no contours → clean smooth surface
+        lighting=dict(ambient=0.18, diffuse=0.50, specular=1.4,
+                      roughness=0.12, fresnel=1.0),
+        lightposition=dict(x=1, y=1, z=3),
     ))
     _fig3d.add_trace(go.Scatter3d(
         x=_px, y=_py, z=_pz,
         mode='markers',
         marker=dict(
-            size=9, color='#FF2200', symbol='circle',
-            line=dict(color='#FFAA88', width=0.8),
+            size=13,
+            color='#FF2200',
+            symbol='circle',
+            line=dict(color='#FF9977', width=1.2),
+            opacity=1.0,
         ),
         hovertemplate='Site (%{x:.0f}, %{y:.0f})<extra></extra>',
         showlegend=False,
@@ -371,15 +382,19 @@ with tab_sim:
             xaxis=dict(visible=False),
             yaxis=dict(visible=False),
             zaxis=dict(visible=False),
-            camera=dict(eye=dict(x=1.55, y=1.55, z=1.05),
-                        up=dict(x=0, y=0, z=1)),
+            # Low side-view camera so wells and particles are clearly visible
+            camera=dict(
+                eye=dict(x=1.9, y=0.25, z=0.28),
+                up=dict(x=0, y=0, z=1),
+            ),
             aspectmode='manual',
-            aspectratio=dict(x=1, y=1, z=0.45),
+            aspectratio=dict(x=1.1, y=1.1, z=0.38),
         ),
         margin=dict(l=0, r=0, t=0, b=0),
-        height=480,
+        height=520,
     )
-    st.plotly_chart(_fig3d, use_container_width=True)
+    # Fill placeholder → chart appears above title/sliders
+    _fig3d_slot.plotly_chart(_fig3d, use_container_width=True)
 
     st.markdown('<p class="sec-lbl">Lattice Configuration</p>', unsafe_allow_html=True)
 
