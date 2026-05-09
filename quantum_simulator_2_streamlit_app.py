@@ -1,49 +1,87 @@
+import math
 import streamlit as st
 import plotly.graph_objects as go
 
-# ── Earthy palette (extracted from swatch image) ───────────────
-SAGE      = "#7D8B5A"   # top-left  green
-AMBER     = "#C9983A"   # top-3rd   golden
-BUTTER    = "#C9BB68"   # mid-left  pale yellow
-STEEL     = "#7A9DAC"   # mid-2nd   dusty blue
-ROSE      = "#C4907E"   # mid-3rd   dusty rose
-OFF_WHITE = "#E5E0D8"   # mid-right cream
-DARK_BRN  = "#4E3428"   # btm-left  umber
-MOSS      = "#9DA872"   # btm-2nd   muted sage
-SLATE     = "#3D5F78"   # btm-3rd   slate blue
-TERRA     = "#A84E3C"   # btm-right terracotta
-CREAM     = "#CEC9BC"   # top-2nd   light beige
+# ── Earthy site/bond colours (constant across modes) ──────────
+SAGE     = "#7D8B5A"
+AMBER    = "#C9983A"
+BUTTER   = "#C9BB68"
+STEEL    = "#7A9DAC"
+ROSE     = "#C4907E"
+MOSS     = "#9DA872"
+SLATE    = "#3D5F78"
+TERRA    = "#A84E3C"
+DARK_BRN = "#4E3428"
+OFF_WHT  = "#E5E0D8"
 
-PAPER     = "#F2EBE0"   # plot canvas (warm parchment)
-PAGE_BG   = "#1C1814"   # page background
-CARD_BG   = "#252018"   # card background
-BORDER    = "#3C3228"   # border
-TXT_MAIN  = OFF_WHITE
-TXT_MUTE  = "#8A7860"
-
-# Colour scheme presets — bipartite sublattice colouring
 SCHEMES = {
-    "Sage & Dusty Rose":    {"even": SAGE,  "odd": ROSE,  "bond": "#9A7E60"},
-    "Amber & Slate":        {"even": AMBER, "odd": SLATE, "bond": "#8A7050"},
-    "Terracotta & Butter":  {"even": TERRA, "odd": BUTTER,"bond": "#9A8060"},
-    "Steel & Moss":         {"even": STEEL, "odd": MOSS,  "bond": "#8A7A60"},
+    "Sage & Dusty Rose":   {"even": SAGE,  "odd": ROSE,   "bond": "#9A7E60"},
+    "Amber & Slate":       {"even": AMBER, "odd": SLATE,  "bond": "#8A7050"},
+    "Terracotta & Butter": {"even": TERRA, "odd": BUTTER, "bond": "#9A8060"},
+    "Steel & Moss":        {"even": STEEL, "odd": MOSS,   "bond": "#8A7A60"},
+}
+
+# ── Theme definitions ──────────────────────────────────────────
+THEMES = {
+    "light": {
+        "page_bg":   "#F5F0E8",
+        "card_bg":   "#EDE7DA",
+        "border":    "#C8BDA8",
+        "plot_bg":   "#FAF7F2",
+        "txt_main":  "#2A2018",
+        "txt_mute":  "#7A6A55",
+        "hero_grad": "linear-gradient(135deg, #EDE7DA 0%, #E3DDD0 100%)",
+        "accent":    "#8B5E2A",
+        "swatch_b":  "rgba(0,0,0,0.18)",
+        "hover_bg":  "#EDE7DA",
+        "hover_txt": "#2A2018",
+        "label_txt": "#1A1410",
+    },
+    "dark": {
+        "page_bg":   "#252018",
+        "card_bg":   "#302A22",
+        "border":    "#4A3C2C",
+        "plot_bg":   "#F2EBE0",
+        "txt_main":  "#E5E0D8",
+        "txt_mute":  "#9A8870",
+        "hero_grad": "linear-gradient(135deg, #302A22 0%, #252018 100%)",
+        "accent":    AMBER,
+        "swatch_b":  "rgba(255,255,255,0.15)",
+        "hover_bg":  "#302A22",
+        "hover_txt": "#E5E0D8",
+        "label_txt": "#E5E0D8",
+    },
 }
 
 # ── Page config ────────────────────────────────────────────────
 st.set_page_config(page_title="Hubbard Model Simulator", layout="wide")
 
+# Mode toggle — must come before CSS so re-run picks up new value
+_, col_toggle = st.columns([6, 1])
+with col_toggle:
+    dark_mode = st.toggle("Dark mode", value=False)
+
+T = THEMES["dark"] if dark_mode else THEMES["light"]
+
+# ── CSS (injected after mode is known) ────────────────────────
 st.markdown(f"""
 <style>
   .stApp {{
-    background-color: {PAGE_BG};
-    color: {TXT_MAIN};
+    background-color: {T['page_bg']};
+    color: {T['txt_main']};
     font-family: 'Georgia', serif;
   }}
   header[data-testid="stHeader"] {{ background: transparent; }}
 
+  /* push the toggle to look like a top-right control */
+  div[data-testid="stToggle"] label p {{
+    color: {T['txt_mute']} !important;
+    font-size: 0.82rem !important;
+  }}
+
   .hero {{
-    background: linear-gradient(135deg, {CARD_BG} 0%, #1F1B13 100%);
-    border: 1px solid {BORDER};
+    background: {T['hero_grad']};
+    border: 1px solid {T['border']};
     border-radius: 16px;
     padding: 1.9rem 2.5rem 1.5rem;
     margin-bottom: 1.2rem;
@@ -51,12 +89,11 @@ st.markdown(f"""
   .hero h1 {{
     font-size: 2.2rem;
     font-weight: 700;
-    color: {AMBER};
+    color: {T['accent']};
     margin: 0 0 0.4rem;
-    letter-spacing: 0.2px;
   }}
   .hero p {{
-    color: {TXT_MUTE};
+    color: {T['txt_mute']};
     font-size: 0.95rem;
     line-height: 1.72;
     margin: 0;
@@ -69,32 +106,32 @@ st.markdown(f"""
   }}
   .metric-card {{
     flex: 1;
-    background: {CARD_BG};
-    border: 1px solid {BORDER};
+    background: {T['card_bg']};
+    border: 1px solid {T['border']};
     border-radius: 12px;
     padding: 0.82rem 1rem;
     text-align: center;
   }}
   .metric-card .lbl {{
     font-size: 0.69rem;
-    color: {TXT_MUTE};
+    color: {T['txt_mute']};
     text-transform: uppercase;
     letter-spacing: 1.3px;
   }}
   .metric-card .val {{
     font-size: 1.85rem;
     font-weight: 700;
-    color: {AMBER};
+    color: {T['accent']};
     line-height: 1.15;
   }}
   .metric-card .sub {{
     font-size: 0.73rem;
-    color: {TXT_MUTE};
+    color: {T['txt_mute']};
   }}
 
   .sec-lbl {{
     font-size: 0.72rem;
-    color: {TXT_MUTE};
+    color: {T['txt_mute']};
     text-transform: uppercase;
     letter-spacing: 1.5px;
     margin: 1.2rem 0 0.4rem;
@@ -104,7 +141,7 @@ st.markdown(f"""
 
   label p, .stSlider label p,
   .stCheckbox label p, .stSelectbox label p {{
-    color: {TXT_MUTE} !important;
+    color: {T['txt_mute']} !important;
     font-size: 0.87rem !important;
   }}
 
@@ -120,28 +157,26 @@ st.markdown(f"""
     align-items: center;
     gap: 0.45rem;
     font-size: 0.80rem;
-    color: {TXT_MUTE};
+    color: {T['txt_mute']};
   }}
   .swatch {{
-    width: 15px;
-    height: 15px;
+    width: 15px; height: 15px;
     border-radius: 50%;
     display: inline-block;
-    border: 1.5px solid rgba(255,255,255,0.15);
+    border: 1.5px solid {T['swatch_b']};
   }}
   .bond-swatch {{
     display: inline-block;
-    width: 22px;
-    height: 3px;
+    width: 22px; height: 3px;
     border-radius: 2px;
   }}
 
   .caption-box {{
-    background: {CARD_BG};
+    background: {T['card_bg']};
     border-left: 3px solid {SAGE};
     border-radius: 0 8px 8px 0;
     padding: 0.7rem 1.1rem;
-    color: {TXT_MUTE};
+    color: {T['txt_mute']};
     font-size: 0.83rem;
     line-height: 1.65;
     margin-top: 0.6rem;
@@ -155,10 +190,10 @@ st.markdown(f"""
   <h1>Hubbard Model Quantum Simulator</h1>
   <p>
     Electrons hop across a D&times;D square lattice with amplitude <em>t</em>.
-    On-site Coulomb repulsion <em>U</em> penalises double occupancy at each site.
-    The two colours show the <strong>bipartite sublattice structure</strong> — a key
-    symmetry driving antiferromagnetism at half-filling.
-    &nbsp;<strong>Hover a site for details.</strong>
+    On-site Coulomb repulsion <em>U</em> penalises double occupancy.
+    The two site colours reveal the <strong>bipartite sublattice structure</strong> —
+    a symmetry driving antiferromagnetism at half-filling.
+    &nbsp;<strong>Hover any site for details.</strong>
   </p>
 </div>
 """, unsafe_allow_html=True)
@@ -177,9 +212,15 @@ with col_d:
     show_bonds = st.checkbox("Bonds", value=True)
 
 scheme = SCHEMES[scheme_name]
-N      = D * D
+N       = D * D
 n_bonds = 2 * D * (D - 1)
-hilbert_str = f"{4**N:,}" if N <= 7 else f"4<sup>{N}</sup>"
+_hval = 4 ** N
+if _hval < 1_000_000_000:
+    hilbert_str = f"{_hval:,}"
+else:
+    _exp = int(math.log10(_hval))
+    _coeff = _hval / (10 ** _exp)
+    hilbert_str = f"{_coeff:.2f} &times; 10<sup>{_exp}</sup>"
 
 # ── Metric cards ───────────────────────────────────────────────
 st.markdown(f"""
@@ -202,7 +243,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# ── Inline legend ──────────────────────────────────────────────
+# ── Legend ─────────────────────────────────────────────────────
 parts = scheme_name.split(" & ")
 lbl_A = parts[0].strip()
 lbl_B = parts[1].strip() if len(parts) > 1 else "B sublattice"
@@ -211,25 +252,24 @@ st.markdown(f"""
 <div class="legend">
   <div class="legend-item">
     <span class="swatch" style="background:{scheme['even']};"></span>
-    <span>{lbl_A} &mdash; A sublattice&nbsp;(row+col even)</span>
+    <span>{lbl_A} — A sublattice (row+col even)</span>
   </div>
   <div class="legend-item">
     <span class="swatch" style="background:{scheme['odd']};"></span>
-    <span>{lbl_B} &mdash; B sublattice&nbsp;(row+col odd)</span>
+    <span>{lbl_B} — B sublattice (row+col odd)</span>
   </div>
   <div class="legend-item">
     <span class="bond-swatch" style="background:{scheme['bond']};"></span>
-    <span>Hopping bond &nbsp;<em>t</em></span>
+    <span>Hopping bond <em>t</em></span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
 
-# ── Flat 2-D lattice ───────────────────────────────────────────
-def build_figure(D, scheme, show_labels, show_bonds):
+# ── 2-D lattice figure ─────────────────────────────────────────
+def build_figure(D, scheme, T, show_labels, show_bonds):
     fig = go.Figure()
 
-    # Bonds
     if show_bonds:
         bx, by = [], []
         for row in range(D):
@@ -248,7 +288,6 @@ def build_figure(D, scheme, show_labels, show_bonds):
             showlegend=False,
         ))
 
-    # Sites — one trace per sublattice so colours are distinct
     marker_size = max(24, 70 - D * 7)
     font_size   = max(8, 18 - D)
 
@@ -264,14 +303,13 @@ def build_figure(D, scheme, show_labels, show_bonds):
                     texts.append(str(idx))
                     hovers.append(
                         f"<b>Site {idx}</b><br>"
-                        f"Grid position: ({col}, {row})<br>"
+                        f"Position: ({col}, {row})<br>"
                         f"Sublattice: {sub_label}"
                     )
 
         fig.add_trace(go.Scatter(
             x=sx, y=sy,
             mode="markers+text" if show_labels else "markers",
-            name=f"Sublattice {sub_label}",
             marker=dict(
                 size=marker_size,
                 color=color,
@@ -281,7 +319,7 @@ def build_figure(D, scheme, show_labels, show_bonds):
             ),
             text=texts if show_labels else None,
             textposition="middle center",
-            textfont=dict(color=OFF_WHITE, size=font_size, family="Arial Black"),
+            textfont=dict(color=T["label_txt"], size=font_size, family="Arial Black"),
             hovertemplate="%{customdata}<extra></extra>",
             customdata=hovers,
             showlegend=False,
@@ -289,13 +327,12 @@ def build_figure(D, scheme, show_labels, show_bonds):
 
     pad = 0.85
     fig.update_layout(
-        paper_bgcolor=PAGE_BG,
-        plot_bgcolor=PAPER,
+        paper_bgcolor=T["page_bg"],
+        plot_bgcolor=T["plot_bg"],
         xaxis=dict(
             range=[-pad, D - 1 + pad],
             showgrid=False, zeroline=False, showticklabels=False,
-            scaleanchor="y", scaleratio=1,
-            fixedrange=True,
+            scaleanchor="y", scaleratio=1, fixedrange=True,
         ),
         yaxis=dict(
             range=[-pad, D - 1 + pad],
@@ -305,25 +342,24 @@ def build_figure(D, scheme, show_labels, show_bonds):
         margin=dict(l=24, r=24, t=24, b=24),
         height=520,
         hoverlabel=dict(
-            bgcolor=CARD_BG,
-            bordercolor=BORDER,
-            font=dict(color=TXT_MAIN, size=13, family="Georgia"),
+            bgcolor=T["hover_bg"],
+            bordercolor=T["border"],
+            font=dict(color=T["hover_txt"], size=13, family="Georgia"),
         ),
         dragmode=False,
     )
     return fig
 
 
-fig = build_figure(D, scheme, show_labels, show_bonds)
+fig = build_figure(D, scheme, T, show_labels, show_bonds)
 st.plotly_chart(fig, use_container_width=True)
 
-# ── Caption ────────────────────────────────────────────────────
 st.markdown(
     f'<div class="caption-box">'
     f'<b>Bipartite structure</b>: the square lattice splits into two interlocking '
-    f'sublattices A and B — coloured differently above. '
-    f'At half-filling with strong repulsion <em>U &gg; t</em>, electrons localise '
-    f'with opposite spins on A and B sites, producing <em>antiferromagnetic order</em>. '
+    f'sublattices A and B. At half-filling with strong repulsion <em>U &gg; t</em>, '
+    f'electrons localise with opposite spins on A and B sites, '
+    f'producing <em>antiferromagnetic order</em>. '
     f'Hover any site to inspect its index and sublattice.'
     f'</div>',
     unsafe_allow_html=True,
