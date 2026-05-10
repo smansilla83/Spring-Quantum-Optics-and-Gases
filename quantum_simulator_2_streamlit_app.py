@@ -820,12 +820,9 @@ shifts $\mp H$ and $\mp 2H$ respectively (Section 4).
 
     with st.expander("6 × 6 Hamiltonian H/J in the Sz = 0 basis", expanded=True):
         st.markdown(r"""
-With $N = 4$ sites and half-filling, the $S_z = 0$ sector has
-$D = \binom{4}{2} = 6$ basis states. The Heisenberg exchange
-$J\bigl[\tfrac{1}{2}(\hat{S}^+_i\hat{S}^-_j + \hat{S}^-_i\hat{S}^+_j)
-+ \hat{S}^z_i\hat{S}^z_j\bigr]$
-gives diagonal $\pm J/4$ per bond and off-diagonal $J/2$ when swapping antiparallel neighbours.
-Because $\hat{H}_Z = 0$ on this sector, the full Hamiltonian is:
+With $N = 4$ sites and half-filling, the $S_z = 0$ sector has $D = \binom{4}{2} = 6$ basis states.
+
+The Heisenberg exchange $J\bigl[\tfrac{1}{2}(\hat{S}^+_i\hat{S}^-_j + \hat{S}^-_i\hat{S}^+_j) + \hat{S}^z_i\hat{S}^z_j\bigr]$ gives diagonal $\pm J/4$ per bond and off-diagonal $J/2$ when swapping antiparallel neighbours. Because $\hat{H}_Z = 0$ on this sector, the full Hamiltonian is:
 
 $$
 \hat{H}\big|_{S_z=0} = J \cdot \mathbf{M}, \qquad
