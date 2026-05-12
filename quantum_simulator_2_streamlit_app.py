@@ -980,12 +980,6 @@ enter with twice the weight and opposite sign; quantum fluctuations then mix in
 the domain-wall configurations, lowering the energy below the classical Néel value
 $E_{\rm Néel}=-J$.
 
-**Verification.** Acting with $\hat{H}/J$ on $|\psi_0\rangle$ gives $-2|\psi_0\rangle$ — one may check this row by row using the $6\times6$ matrix $\mathbf{M}$ (Section 3):
-
-$$\mathbf{M}\begin{pmatrix}1\\-2\\1\\1\\-2\\1\end{pmatrix}
-= \begin{pmatrix}-2\\4\\-2\\-2\\4\\-2\end{pmatrix}
-= -2\begin{pmatrix}1\\-2\\1\\1\\-2\\1\end{pmatrix}
-\quad\Rightarrow\quad E_0 = -2J.\quad\blacksquare$$
 """)
         _wf_evals2, _wf_evecs2 = np.linalg.eigh(_H_unit)
         _gs_v2 = _wf_evecs2[:, 0].copy()
