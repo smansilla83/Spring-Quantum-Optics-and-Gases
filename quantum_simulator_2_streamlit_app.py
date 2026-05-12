@@ -1024,9 +1024,14 @@ $E_{\rm Néel}=-J$.
         st.markdown("---")
         st.markdown(r"""
 **Case 2 — $J = 0$ (pure Zeeman).**
-Without exchange the field alone governs the ground state.
-For any $H > 0$ the fully polarised state $|\!\uparrow\uparrow\uparrow\uparrow\rangle$ ($S_z = +2$)
-is lowest with $E = -2H$. There is no staircase — the system jumps straight to full polarisation.
+Without exchange the field alone governs the ground state via $\hat{H} = -H\hat{S}^z_{\rm total}$.
+The energy of a fully polarised state is $E = -H \cdot S_z^{\rm total}$, so the sign of $H$ selects which direction is favoured:
+
+- $H > 0$: $|\!\uparrow\uparrow\uparrow\uparrow\rangle$ ($S_z = +2$) is lowest, $E = -2H < 0$.
+- $H < 0$: $|\!\downarrow\downarrow\downarrow\downarrow\rangle$ ($S_z = -2$) is lowest, $E = +2H < 0$ (since $H < 0$).
+
+The all-down state is equally valid as a ground state — the field simply points the other way.
+In both cases there is no staircase: without exchange the system jumps straight to full polarisation.
 """)
 
     with st.expander("General case H, J > 0 — energy levels vs field", expanded=True):
