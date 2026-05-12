@@ -890,15 +890,7 @@ quantum fluctuations lower the energy by a factor of 2.
         E2_0    = float(build_heisenberg(1.0, _sz2_basis)[0, 0])
 
         def _fmt_ev(arr):
-            parts = []
-            gs_val = arr[0]   # lowest eigenvalue = ground state of sector
-            for v in arr:
-                s = f"{v:.4g}"
-                if v == gs_val:
-                    parts.append(f'<b style="color:{T["accent"]};">{s} ★</b>')
-                else:
-                    parts.append(f'<span style="color:{T["txt_main"]};">{s}</span>')
-            return ",&ensp;".join(parts)
+            return ",&ensp;".join(f'<span style="color:{T["txt_main"]};">{v:.4g}</span>' for v in arr)
 
         c0, c1, c2 = st.columns(3)
         with c0:
@@ -920,39 +912,28 @@ quantum fluctuations lower the energy by a factor of 2.
                 f'<div class="z-card">'
                 f'<b>Sz = ±2</b>&nbsp;<small style="color:{T["txt_mute"]}">D = 1</small><br>'
                 f'<small style="color:{T["txt_mute"]}">eigenvalues E/J:</small><br>'
-                f'<b style="color:{T["accent"]};">{E2_0:.4g} ★</b>'
+                f'<span style="color:{T["txt_main"]};">{E2_0:.4g}</span>'
                 f'</div>', unsafe_allow_html=True)
 
-        st.markdown(f"""
-<div class="caption-box" style="margin-top:0.8rem;">
-  <b>★ = lowest eigenvalue (ground state of that sector)</b><br><br>
-  The <b>global ground state</b> at $H = 0$ is the starred level in the
-  <b>Sz = 0</b> sector, $E_0 = -2J$. It is a quantum singlet ($S_{{\\rm total}} = 0$)
-  with wavefunction:
-</div>
-""", unsafe_allow_html=True)
-
         st.markdown(r"""
-$$
-|{\rm GS}\rangle
-= \frac{1}{2\sqrt{3}}\Bigl(
-    |\!\uparrow\uparrow\downarrow\downarrow\rangle
-  + |\!\uparrow\downarrow\downarrow\uparrow\rangle
-  + |\!\downarrow\uparrow\uparrow\downarrow\rangle
-  + |\!\downarrow\downarrow\uparrow\uparrow\rangle
-  \Bigr)
-- \frac{1}{\sqrt{3}}\Bigl(
-    |\!\uparrow\downarrow\uparrow\downarrow\rangle
-  + |\!\downarrow\uparrow\downarrow\uparrow\rangle
-  \Bigr)
-$$
+---
+**In which sector would you expect to find the ground state?**
 
-The two **Néel states** $|\!\uparrow\downarrow\uparrow\downarrow\rangle$ and
-$|\!\downarrow\uparrow\downarrow\uparrow\rangle$ enter with a **negative** coefficient
-$-1/\sqrt{3}$, while the four domain-wall states carry a **positive** coefficient
-$+1/(2\sqrt{3})$. This destructive interference on the Néel states is a hallmark of
-quantum entanglement and is the reason the ground-state energy $E_0 = -2J$ lies below
-the classical Néel energy $E_{\rm N\acute{e}el} = -J$.
+Comparing the lowest eigenvalue in each sector:
+
+| Sector $S_z$ | Lowest $E/J$ at $H = 0$ |
+|:---:|:---:|
+| $0$ | $-2$ |
+| $\pm 1$ | $-1$ |
+| $\pm 2$ | $+1$ |
+
+The $S_z = 0$ sector has the globally lowest minimum ($-2J$), so at zero field the ground
+state must lie there. This is physically expected: antiferromagnetic exchange ($J > 0$) favours
+opposite spins on neighbouring sites, which minimises energy when the total spin projection is
+zero. States with $|S_z| > 0$ require some net alignment, which costs exchange energy and
+therefore have higher minima. As the field $H$ increases, the sectors with $S_z > 0$ gain a
+Zeeman energy $-H S_z$ that eventually makes them competitive — this is the origin of the
+magnetisation staircase discussed in Section 6.
 """)
 
     # ── Section 4: Energy levels vs H ──────────────────────────
