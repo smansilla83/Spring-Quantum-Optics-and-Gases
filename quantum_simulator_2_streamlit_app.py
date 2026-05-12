@@ -946,19 +946,14 @@ magnetisation staircase discussed in Section 6.
 Every $S_z$ projection of a given $S_{\rm total}$ multiplet is degenerate.
 Ground state: the **singlet** ($S_{\rm total} = 0$, $S_z = 0$), $E_0 = -2J$.
 This is below the classical Néel state ($E_{\rm Néel} = -J$) — quantum fluctuations lower the energy.
-
-**Case 2 — $J = 0$ (pure Zeeman).**
-Without exchange the field alone governs the ground state.
-For any $H > 0$ the fully polarised state $|\!\uparrow\uparrow\uparrow\uparrow\rangle$ ($S_z = +2$)
-is lowest with $E = -2H$. There is no staircase — the system jumps straight to full polarisation.
 """)
 
-        st.markdown("---")
+        # ── Ground-state wavefunction (H=0) ──────────────────────
         st.markdown(r"""
 **Exact ground-state wavefunction at $H = 0$**
 
-Diagonalising the $6\times6$ block in the $S_z=0$ sector (Section 3) yields the lowest eigenvalue
-$E_0 = -2J$ with the singlet eigenvector:
+Diagonalising the $6\times6$ block in the $S_z=0$ sector yields the unique
+lowest eigenvalue $E_0 = -2J$ (non-degenerate singlet) with eigenvector:
 
 $$
 |\psi_0\rangle
@@ -977,16 +972,21 @@ $$
 \Bigr]
 $$
 
-The two **Néel states** $|\!\uparrow\downarrow\uparrow\downarrow\rangle$ and
-$|\!\downarrow\uparrow\downarrow\uparrow\rangle$ appear with amplitude
-$-1/\sqrt{3}\approx -0.577$, while each of the four domain-wall states carries
-$+1/(2\sqrt{3})\approx +0.289$.
-The Néel states dominate because antiferromagnetic exchange energetically favours
-bond-alternating configurations; quantum fluctuations then mix in the domain-wall
-states, delocalising the ground state over the entire $S_z=0$ subspace and lowering
-the energy below the classical Néel value $E_{\rm Néel}=-J$.
-""")
+The four **domain-wall states** each carry amplitude $+\tfrac{1}{2\sqrt{3}}\approx+0.289$;
+the two **Néel states** $|\!\uparrow\downarrow\uparrow\downarrow\rangle$ and
+$|\!\downarrow\uparrow\downarrow\uparrow\rangle$ carry $-\tfrac{1}{\sqrt{3}}\approx-0.577$.
+Antiferromagnetic exchange prefers bond-alternating order, so the Néel states
+enter with twice the weight and opposite sign; quantum fluctuations then mix in
+the domain-wall configurations, lowering the energy below the classical Néel value
+$E_{\rm Néel}=-J$.
 
+**Verification.** Acting with $\hat{H}/J$ on $|\psi_0\rangle$ gives $-2|\psi_0\rangle$ — one may check this row by row using the $6\times6$ matrix $\mathbf{M}$ (Section 3):
+
+$$\mathbf{M}\begin{pmatrix}1\\-2\\1\\1\\-2\\1\end{pmatrix}
+= \begin{pmatrix}-2\\4\\-2\\-2\\4\\-2\end{pmatrix}
+= -2\begin{pmatrix}1\\-2\\1\\1\\-2\\1\end{pmatrix}
+\quad\Rightarrow\quad E_0 = -2J.\quad\blacksquare$$
+""")
         _wf_evals2, _wf_evecs2 = np.linalg.eigh(_H_unit)
         _gs_v2 = _wf_evecs2[:, 0].copy()
         if _gs_v2[1] > 0:
@@ -1004,7 +1004,7 @@ the energy below the classical Néel value $E_{\rm Néel}=-J$.
                 f'</tr>'
             )
         st.markdown(f"""
-<div style="border-radius:10px;overflow:hidden;border:1px solid {T['border']};margin-top:0.8rem;margin-bottom:0.5rem;">
+<div style="border-radius:10px;overflow:hidden;border:1px solid {T['border']};margin-top:0.6rem;margin-bottom:0.5rem;">
 <table style="width:100%;border-collapse:collapse;background:{T['card_bg']};">
   <thead>
     <tr style="background:{T['card_bg']};border-bottom:2px solid {T['border']};">
@@ -1018,15 +1018,22 @@ the energy below the classical Néel value $E_{\rm Néel}=-J$.
 """, unsafe_allow_html=True)
         st.markdown(
             f'<div class="caption-box">'
-            f'Normalization: &Sigma;|c|&sup2;&nbsp;=&nbsp;'
-            f'{float(np.dot(_gs_v2, _gs_v2)):.6f}. &ensp;'
+            f'Normalization: &Sigma;|c|&sup2;&nbsp;=&nbsp;{float(np.dot(_gs_v2, _gs_v2)):.6f}. &ensp;'
             f'Domain-wall states <span style="color:#7D8B5A;font-weight:600;">(green)</span>'
-            f'&nbsp;c&nbsp;&asymp;&nbsp;+{1/(2*np.sqrt(3)):.4f} &ensp;&mdash;&ensp; '
+            f'&nbsp;c&nbsp;=&nbsp;1/(2&radic;3)&nbsp;&asymp;&nbsp;+{1/(2*np.sqrt(3)):.4f};&ensp;'
             f'N&eacute;el states <span style="color:#C4907E;font-weight:600;">(red)</span>'
-            f'&nbsp;c&nbsp;&asymp;&nbsp;{-1/np.sqrt(3):.4f}.'
+            f'&nbsp;c&nbsp;=&nbsp;&minus;1/&radic;3&nbsp;&asymp;&nbsp;{-1/np.sqrt(3):.4f}.'
             f'</div>',
             unsafe_allow_html=True,
         )
+
+        st.markdown("---")
+        st.markdown(r"""
+**Case 2 — $J = 0$ (pure Zeeman).**
+Without exchange the field alone governs the ground state.
+For any $H > 0$ the fully polarised state $|\!\uparrow\uparrow\uparrow\uparrow\rangle$ ($S_z = +2$)
+is lowest with $E = -2H$. There is no staircase — the system jumps straight to full polarisation.
+""")
 
     with st.expander("General case H, J > 0 — energy levels vs field", expanded=True):
         st.markdown(r"""
