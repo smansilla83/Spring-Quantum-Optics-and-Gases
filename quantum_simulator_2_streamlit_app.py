@@ -953,6 +953,81 @@ For any $H > 0$ the fully polarised state $|\!\uparrow\uparrow\uparrow\uparrow\r
 is lowest with $E = -2H$. There is no staircase — the system jumps straight to full polarisation.
 """)
 
+        st.markdown("---")
+        st.markdown(r"""
+**Exact ground-state wavefunction at $H = 0$**
+
+Diagonalising the $6\times6$ block in the $S_z=0$ sector (Section 3) yields the lowest eigenvalue
+$E_0 = -2J$ with the singlet eigenvector:
+
+$$
+|\psi_0\rangle
+= \frac{1}{2\sqrt{3}}
+\Bigl[
+  \bigl(
+    |\!\uparrow\uparrow\downarrow\downarrow\rangle
+  + |\!\uparrow\downarrow\downarrow\uparrow\rangle
+  + |\!\downarrow\uparrow\uparrow\downarrow\rangle
+  + |\!\downarrow\downarrow\uparrow\uparrow\rangle
+  \bigr)
+  - 2\bigl(
+    |\!\uparrow\downarrow\uparrow\downarrow\rangle
+  + |\!\downarrow\uparrow\downarrow\uparrow\rangle
+  \bigr)
+\Bigr]
+$$
+
+The two **Néel states** $|\!\uparrow\downarrow\uparrow\downarrow\rangle$ and
+$|\!\downarrow\uparrow\downarrow\uparrow\rangle$ appear with amplitude
+$-1/\sqrt{3}\approx -0.577$, while each of the four domain-wall states carries
+$+1/(2\sqrt{3})\approx +0.289$.
+The Néel states dominate because antiferromagnetic exchange energetically favours
+bond-alternating configurations; quantum fluctuations then mix in the domain-wall
+states, delocalising the ground state over the entire $S_z=0$ subspace and lowering
+the energy below the classical Néel value $E_{\rm Néel}=-J$.
+""")
+
+        _wf_evals2, _wf_evecs2 = np.linalg.eigh(_H_unit)
+        _gs_v2 = _wf_evecs2[:, 0].copy()
+        if _gs_v2[1] > 0:
+            _gs_v2 = -_gs_v2
+        _wf_lbls = [_spin_label(s) for s in _sz0_basis]
+        _wf_rows = ""
+        for _lbl, _c in zip(_wf_lbls, _gs_v2):
+            _col = "#C4907E" if _c < -1e-10 else "#7D8B5A"
+            _wf_rows += (
+                f'<tr style="border-bottom:1px solid {T["border"]};">'
+                f'<td style="padding:7px 16px;font-family:Georgia;color:{T["txt_main"]};'
+                f'text-align:center;">{_lbl}</td>'
+                f'<td style="padding:7px 16px;text-align:center;font-weight:600;'
+                f'color:{_col};font-family:monospace;">{_c:+.6f}</td>'
+                f'</tr>'
+            )
+        st.markdown(f"""
+<div style="border-radius:10px;overflow:hidden;border:1px solid {T['border']};margin-top:0.8rem;margin-bottom:0.5rem;">
+<table style="width:100%;border-collapse:collapse;background:{T['card_bg']};">
+  <thead>
+    <tr style="background:{T['card_bg']};border-bottom:2px solid {T['border']};">
+      <th style="padding:8px 16px;color:{T['txt_mute']};font-size:0.80rem;font-weight:600;text-align:center;">Basis state |b⟩</th>
+      <th style="padding:8px 16px;color:{T['txt_mute']};font-size:0.80rem;font-weight:600;text-align:center;">Coefficient ⟨b|ψ₀⟩</th>
+    </tr>
+  </thead>
+  <tbody style="font-size:0.92rem;">{_wf_rows}</tbody>
+</table>
+</div>
+""", unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="caption-box">'
+            f'Normalization: &Sigma;|c|&sup2;&nbsp;=&nbsp;'
+            f'{float(np.dot(_gs_v2, _gs_v2)):.6f}. &ensp;'
+            f'Domain-wall states <span style="color:#7D8B5A;font-weight:600;">(green)</span>'
+            f'&nbsp;c&nbsp;&asymp;&nbsp;+{1/(2*np.sqrt(3)):.4f} &ensp;&mdash;&ensp; '
+            f'N&eacute;el states <span style="color:#C4907E;font-weight:600;">(red)</span>'
+            f'&nbsp;c&nbsp;&asymp;&nbsp;{-1/np.sqrt(3):.4f}.'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
     with st.expander("General case H, J > 0 — energy levels vs field", expanded=True):
         st.markdown(r"""
 The Zeeman term adds $-H \cdot S_z^{\rm total}$ uniformly to each sector:
