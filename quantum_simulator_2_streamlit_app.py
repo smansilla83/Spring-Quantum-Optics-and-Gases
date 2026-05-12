@@ -295,7 +295,7 @@ def _spin_label(state):
     return "|" + "".join("↑" if s else "↓" for s in state) + "⟩"
 
 # ── Tabs ───────────────────────────────────────────────────────
-tab_sim, tab_zeeman = st.tabs(["Hubbard Simulator", "Zeeman Analysis"])
+tab_sim, tab_zeeman, tab_impl = st.tabs(["Hubbard Simulator", "Zeeman Analysis", "Numerical Implementation"])
 
 # ══════════════════════════════════════════════════════════════
 # TAB 1 — Hubbard Simulator
@@ -1320,3 +1320,234 @@ sparse Krylov (Lanczos) methods, and eventually to DMRG or quantum Monte Carlo.
             f'</div>',
             unsafe_allow_html=True,
         )
+
+# ══════════════════════════════════════════════════════════════
+# TAB 3 — Numerical Implementation
+# ══════════════════════════════════════════════════════════════
+with tab_impl:
+
+    st.markdown(f"""
+<div class="hero">
+  <h1 style="font-size:1.6rem;">Numerical Implementation Guide</h1>
+  <p>
+    Two essential techniques for scaling exact diagonalization beyond small systems:
+    <strong>Sz block diagonalization</strong> to shrink the working matrix, and
+    <strong>sparse solvers</strong> to handle the matrices that remain.
+  </p>
+</div>
+""", unsafe_allow_html=True)
+
+    # ── Block diagonalization ───────────────────────────────────
+    st.markdown('<p class="sec-lbl">1 · Sz Block Diagonalization</p>',
+                unsafe_allow_html=True)
+
+    with st.expander("Solve Ĥ within blocks of fixed Sz to reduce matrix size", expanded=True):
+        st.markdown(r"""
+Because $[\hat{H},\,\hat{S}^z_{\rm total}] = 0$, the Hamiltonian is **block-diagonal** in the
+total spin projection $S_z$.  Rather than diagonalising the full $2^N \times 2^N$ matrix, one
+solves $N+1$ independent sub-problems — one per $S_z$ sector.
+
+**Why this matters:**
+
+| Quantity | Full space | $S_z = 0$ block only |
+|:---|:---:|:---:|
+| States | $2^N$ | $\binom{N}{N/2}$ |
+| Matrix entries | $4^N$ | $\binom{N}{N/2}^2$ |
+| Memory (float64) at $N = 20$ | $\sim$1 TB | $\sim$270 GB |
+| Memory (float64) at $N = 16$ | $\sim$32 GB | $\sim$1.2 GB |
+
+Working sector by sector reduces both memory and CPU time by a factor of roughly $\sqrt{2/\pi N}$
+(Stirling estimate of the binomial peak).
+
+**Implementation pattern:**
+""")
+        st.code("""\
+from itertools import combinations
+import numpy as np
+
+def enumerate_basis(N, Nup):
+    \"\"\"All spin-1/2 basis states with exactly Nup up-spins on N sites.\"\"\"
+    return [tuple(1 if i in up else 0 for i in range(N))
+            for up in combinations(range(N), Nup)]
+
+def build_hamiltonian(J, basis, bonds):
+    \"\"\"Build Heisenberg H matrix for a given Sz sector.\"\"\"
+    n = len(basis)
+    H = np.zeros((n, n))
+    idx = {s: i for i, s in enumerate(basis)}
+    for row, state in enumerate(basis):
+        for (a, b) in bonds:
+            sz_a = 0.5 if state[a] else -0.5
+            sz_b = 0.5 if state[b] else -0.5
+            H[row, row] += J * sz_a * sz_b          # Ising diagonal
+            if state[a] != state[b]:                 # flip-flop off-diagonal
+                lst = list(state); lst[a], lst[b] = lst[b], lst[a]
+                ns = tuple(lst)
+                if ns in idx:
+                    H[row, idx[ns]] += J * 0.5
+    return H
+
+# 2x2 square lattice with PBC — bonds
+N     = 4
+bonds = [(0,1),(1,3),(3,2),(2,0)]   # ring equivalent to 2x2 PBC
+
+# Solve each Sz sector independently
+spectra = {}
+for Nup in range(N + 1):
+    Sz  = Nup - N / 2               # Sz = Nup - Ndown)/2
+    basis = enumerate_basis(N, Nup)
+    H     = build_hamiltonian(1.0, basis, bonds)
+    evals = np.sort(np.linalg.eigvalsh(H))
+    spectra[Sz] = evals
+    print(f"Sz = {Sz:+.1f}  dim = {len(basis):4d}  E_min/J = {evals[0]:.6f}")
+""", language="python")
+
+        st.markdown(f"""
+<div class="caption-box">
+  Running the snippet above on the 2×2 lattice reproduces the analytical spectrum from
+  Section 4 of the Zeeman Analysis tab exactly. The same pattern extends to any
+  $N$ and any lattice geometry — just change <code>N</code> and <code>bonds</code>.
+</div>
+""", unsafe_allow_html=True)
+
+    # ── Sparse matrices ─────────────────────────────────────────
+    st.markdown('<p class="sec-lbl">2 · Sparse Matrices for N &gt; 20</p>',
+                unsafe_allow_html=True)
+
+    with st.expander("scipy.sparse.linalg.eigsh — find lowest eigenvalues without storing the full matrix",
+                     expanded=True):
+        st.markdown(r"""
+For $N > 20$ the $S_z = 0$ block alone exceeds $\sim10^5$ states and cannot be stored as a
+dense array.  Instead, represent $\hat{H}$ as a **sparse matrix** (only the non-zero entries
+are stored) and use the **Lanczos / ARPACK** iterative eigensolver to find the few lowest
+eigenvalues without ever forming the full matrix.
+""")
+        st.code("""\
+import numpy as np
+import scipy.sparse as sp
+import scipy.sparse.linalg as spla
+from itertools import combinations
+
+def build_sparse_hamiltonian(J, basis, bonds):
+    \"\"\"Build Heisenberg H as a scipy sparse COO matrix.\"\"\"
+    idx = {s: i for i, s in enumerate(basis)}
+    n   = len(basis)
+    rows, cols, data = [], [], []
+
+    for row, state in enumerate(basis):
+        for (a, b) in bonds:
+            sz_a = 0.5 if state[a] else -0.5
+            sz_b = 0.5 if state[b] else -0.5
+            # Diagonal Ising term
+            rows.append(row); cols.append(row)
+            data.append(J * sz_a * sz_b)
+            # Off-diagonal flip-flop term
+            if state[a] != state[b]:
+                lst = list(state); lst[a], lst[b] = lst[b], lst[a]
+                ns = tuple(lst)
+                if ns in idx:
+                    rows.append(row); cols.append(idx[ns])
+                    data.append(J * 0.5)
+
+    return sp.csr_matrix((data, (rows, cols)), shape=(n, n))
+
+# Example: 16-site chain, Sz = 0 sector
+N     = 16
+bonds = [(i, (i+1) % N) for i in range(N)]   # periodic 1D chain
+basis = [tuple(1 if i in up else 0 for i in range(N))
+         for up in combinations(range(N), N // 2)]
+
+H_sparse = build_sparse_hamiltonian(1.0, basis, bonds)
+print(f"Block dimension: {H_sparse.shape[0]:,}")
+print(f"Non-zero entries: {H_sparse.nnz:,}  (density {H_sparse.nnz/H_sparse.shape[0]**2:.2e})")
+
+# Find 6 lowest eigenvalues — no dense matrix needed
+evals, _ = spla.eigsh(H_sparse, k=6, which="SA")   # SA = smallest algebraic
+print("Lowest eigenvalues E/J:", np.sort(evals))
+""", language="python")
+
+        st.markdown(
+            f'<div class="caption-box">'
+            f'<code>eigsh</code> (symmetric/Hermitian) is preferred over <code>eigs</code> for spin '
+            f'Hamiltonians because H&#770; is real-symmetric. The <code>which="SA"</code> flag '
+            f'("smallest algebraic") targets the ground state and low-lying excitations directly, '
+            f'so runtime is independent of the block dimension &mdash; only the number of requested '
+            f'eigenvalues <code>k</code> matters.'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+    with st.expander("QuSpin — purpose-built ED library for quantum lattice models", expanded=True):
+        st.markdown(r"""
+**QuSpin** provides a higher-level interface that handles basis construction, symmetry
+reduction, and matrix-vector products automatically.  It is especially convenient for
+lattice models with translation, reflection, or spin-inversion symmetry, which can
+shrink the working block by another factor of $N$ or more.
+""")
+        st.code("""\
+# Install: pip install quspin
+from quspin.operators import hamiltonian
+from quspin.basis   import spin_basis_1d
+import numpy as np
+
+# 4-site Heisenberg ring (same as our 2x2 analytic case)
+N = 4
+J = 1.0
+
+# Build the spin-1/2 basis restricted to Sz = 0
+basis = spin_basis_1d(N, Nup=N//2)   # Nup = N/2 → Sz = 0 sector
+
+# Define coupling lists: [[strength, site_i, site_j], ...]
+Jzz = [[J, i, (i+1) % N] for i in range(N)]   # Sz Sz
+Jpm = [[J/2, i, (i+1) % N] for i in range(N)] # S+ S-
+Jmp = [[J/2, i, (i+1) % N] for i in range(N)] # S- S+
+
+static  = [["zz", Jzz], ["+-", Jpm], ["-+", Jmp]]
+dynamic = []
+
+H = hamiltonian(static, dynamic, basis=basis, dtype=np.float64)
+evals = H.eigvalsh()   # dense diagonalisation
+print("Sz=0 eigenvalues E/J:", np.round(evals, 6))
+# → [-2.  -1.   0.   0.   0.   1.]  ✓
+""", language="python")
+
+        st.markdown(f"""
+<div class="caption-box">
+  For larger systems replace <code>spin_basis_1d</code> with <code>spin_basis_general</code>
+  (arbitrary lattice geometry) and call <code>H.eigsh(k=6, which="SA")</code> instead of
+  <code>H.eigvalsh()</code> to use the sparse Lanczos solver.
+</div>
+""", unsafe_allow_html=True)
+
+    # ── Resources ───────────────────────────────────────────────
+    st.markdown('<p class="sec-lbl">3 · Online Resources</p>',
+                unsafe_allow_html=True)
+
+    st.markdown(f"""
+<div class="z-card" style="margin-top:0.4rem;">
+  <b style="color:{T['accent']};">QuSpin</b>
+  &ensp;&mdash;&ensp; exact diagonalization &amp; dynamics for quantum lattice models<br>
+  <a href="https://weinbe58.github.io/QuSpin/" target="_blank"
+     style="color:{T['accent']};font-family:monospace;">
+    https://weinbe58.github.io/QuSpin/
+  </a><br>
+  <span style="color:{T['txt_mute']};font-size:0.85rem;">
+    Covers spin chains, Hubbard models, and Floquet systems.
+    Includes tutorials on symmetry-reduced bases, sparse solvers, and time evolution.
+  </span>
+</div>
+
+<div class="z-card" style="margin-top:0.6rem;">
+  <b style="color:{T['accent']};">SciPy Sparse Linear Algebra</b>
+  &ensp;&mdash;&ensp; <code>scipy.sparse.linalg.eigsh</code><br>
+  <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.eigsh.html"
+     target="_blank" style="color:{T['accent']};font-family:monospace;">
+    docs.scipy.org &rarr; scipy.sparse.linalg.eigsh
+  </a><br>
+  <span style="color:{T['txt_mute']};font-size:0.85rem;">
+    ARPACK-backed Lanczos solver. Works on any real-symmetric sparse matrix.
+    Key parameters: <code>k</code> (number of eigenvalues), <code>which="SA"</code>
+    (smallest algebraic — ground state), <code>tol</code> (convergence).
+  </span>
+</div>
+""", unsafe_allow_html=True)
