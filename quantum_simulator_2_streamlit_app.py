@@ -881,23 +881,79 @@ The global ground state at $H = 0$ is the **singlet** in $S_z = 0$ with $E_0 = -
 This is lower than the classical Néel energy $E_{\rm Néel} = -J$:
 quantum fluctuations lower the energy by a factor of 2.
 """)
-        evals_0 = np.sort(np.linalg.eigvalsh(build_heisenberg(1.0, _sz0_basis)))
-        evals_1 = np.sort(np.linalg.eigvalsh(build_heisenberg(1.0, _sz1_basis)))
+        # Round away floating-point noise (values < 1e-10 are numerically zero)
+        def _clean(arr):
+            return np.where(np.abs(arr) < 1e-10, 0.0, np.round(arr, 10))
+
+        evals_0 = _clean(np.sort(np.linalg.eigvalsh(build_heisenberg(1.0, _sz0_basis))))
+        evals_1 = _clean(np.sort(np.linalg.eigvalsh(build_heisenberg(1.0, _sz1_basis))))
         E2_0    = float(build_heisenberg(1.0, _sz2_basis)[0, 0])
 
-        def _fmt(arr):
-            return ", ".join(f"{v:.4g}" for v in arr)
+        def _fmt_ev(arr):
+            parts = []
+            gs_val = arr[0]   # lowest eigenvalue = ground state of sector
+            for v in arr:
+                s = f"{v:.4g}"
+                if v == gs_val:
+                    parts.append(f'<b style="color:{T["accent"]};">{s} ★</b>')
+                else:
+                    parts.append(f'<span style="color:{T["txt_main"]};">{s}</span>')
+            return ",&ensp;".join(parts)
 
         c0, c1, c2 = st.columns(3)
         with c0:
-            st.markdown(f'<div class="z-card"><b>Sz = 0</b>&nbsp;<small style="color:{T["txt_mute"]}">D=6</small>'
-                        f'<br><code>{_fmt(evals_0)}</code></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="z-card">'
+                f'<b>Sz = 0</b>&nbsp;<small style="color:{T["txt_mute"]}">D = 6</small><br>'
+                f'<small style="color:{T["txt_mute"]}">eigenvalues E/J:</small><br>'
+                f'{_fmt_ev(evals_0)}'
+                f'</div>', unsafe_allow_html=True)
         with c1:
-            st.markdown(f'<div class="z-card"><b>Sz = ±1</b>&nbsp;<small style="color:{T["txt_mute"]}">D=4</small>'
-                        f'<br><code>{_fmt(evals_1)}</code></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="z-card">'
+                f'<b>Sz = ±1</b>&nbsp;<small style="color:{T["txt_mute"]}">D = 4</small><br>'
+                f'<small style="color:{T["txt_mute"]}">eigenvalues E/J:</small><br>'
+                f'{_fmt_ev(evals_1)}'
+                f'</div>', unsafe_allow_html=True)
         with c2:
-            st.markdown(f'<div class="z-card"><b>Sz = ±2</b>&nbsp;<small style="color:{T["txt_mute"]}">D=1</small>'
-                        f'<br><code>{E2_0:.4g}</code></div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="z-card">'
+                f'<b>Sz = ±2</b>&nbsp;<small style="color:{T["txt_mute"]}">D = 1</small><br>'
+                f'<small style="color:{T["txt_mute"]}">eigenvalues E/J:</small><br>'
+                f'<b style="color:{T["accent"]};">{E2_0:.4g} ★</b>'
+                f'</div>', unsafe_allow_html=True)
+
+        st.markdown(f"""
+<div class="caption-box" style="margin-top:0.8rem;">
+  <b>★ = lowest eigenvalue (ground state of that sector)</b><br><br>
+  The <b>global ground state</b> at $H = 0$ is the starred level in the
+  <b>Sz = 0</b> sector, $E_0 = -2J$. It is a quantum singlet ($S_{{\\rm total}} = 0$)
+  with wavefunction:
+</div>
+""", unsafe_allow_html=True)
+
+        st.markdown(r"""
+$$
+|{\rm GS}\rangle
+= \frac{1}{2\sqrt{3}}\Bigl(
+    |\!\uparrow\uparrow\downarrow\downarrow\rangle
+  + |\!\uparrow\downarrow\downarrow\uparrow\rangle
+  + |\!\downarrow\uparrow\uparrow\downarrow\rangle
+  + |\!\downarrow\downarrow\uparrow\uparrow\rangle
+  \Bigr)
+- \frac{1}{\sqrt{3}}\Bigl(
+    |\!\uparrow\downarrow\uparrow\downarrow\rangle
+  + |\!\downarrow\uparrow\downarrow\uparrow\rangle
+  \Bigr)
+$$
+
+The two **Néel states** $|\!\uparrow\downarrow\uparrow\downarrow\rangle$ and
+$|\!\downarrow\uparrow\downarrow\uparrow\rangle$ enter with a **negative** coefficient
+$-1/\sqrt{3}$, while the four domain-wall states carry a **positive** coefficient
+$+1/(2\sqrt{3})$. This destructive interference on the Néel states is a hallmark of
+quantum entanglement and is the reason the ground-state energy $E_0 = -2J$ lies below
+the classical Néel energy $E_{\rm N\acute{e}el} = -J$.
+""")
 
     # ── Section 4: Energy levels vs H ──────────────────────────
     st.markdown('<p class="sec-lbl">5 · Eigenenergies and Limiting Regimes</p>',
