@@ -294,8 +294,58 @@ _H_unit = build_heisenberg(1.0, _sz0_basis)
 def _spin_label(state):
     return "|" + "".join("↑" if s else "↓" for s in state) + "⟩"
 
+# ── Numerical ED (cached, square lattice PBC) ─────────────────
+@st.cache_data(show_spinner=False)
+def _ed_spectrum(D, J):
+    """Lowest eigenvalues per Sz>=0 sector for D×D Heisenberg square lattice with PBC."""
+    import scipy.sparse as _sp
+    import scipy.sparse.linalg as _spla
+    N = D * D
+    bonds = []
+    for r in range(D):
+        for c in range(D):
+            s = r * D + c
+            bonds.append((s, r * D + (c + 1) % D))
+            bonds.append((s, ((r + 1) % D) * D + c))
+    result = {}
+    for Nup in range(math.ceil(N / 2), N + 1):
+        Sz_int = 2 * Nup - N   # 2×Sz as integer
+        basis = [tuple(1 if i in up else 0 for i in range(N))
+                 for up in combinations(range(N), Nup)]
+        dim = len(basis)
+        idx_map = {s: i for i, s in enumerate(basis)}
+        ri, ci, di = [], [], []
+        for row_i, state in enumerate(basis):
+            for (a, b) in bonds:
+                sza = 0.5 if state[a] else -0.5
+                szb = 0.5 if state[b] else -0.5
+                ri.append(row_i); ci.append(row_i); di.append(J * sza * szb)
+                if state[a] != state[b]:
+                    lst = list(state); lst[a], lst[b] = lst[b], lst[a]
+                    ns = tuple(lst)
+                    if ns in idx_map:
+                        ri.append(row_i); ci.append(idx_map[ns]); di.append(J * 0.5)
+        H_mat = _sp.csr_matrix((di, (ri, ci)), shape=(dim, dim))
+        k = min(6, dim)
+        if dim <= 500:
+            ev = np.sort(np.linalg.eigvalsh(H_mat.toarray()))[:k]
+        else:
+            ev, _ = _spla.eigsh(H_mat, k=k, which='SA')
+            ev = np.sort(ev)
+        result[Sz_int] = ev
+    return result
+
+def _sz_label(Sz_int):
+    if Sz_int == 0: return "0"
+    if Sz_int % 2 == 0: return f"+{Sz_int // 2}"
+    return f"+{Sz_int}/2"
+
+def _sz_neg_label(Sz_int):
+    if Sz_int % 2 == 0: return f"-{Sz_int // 2}"
+    return f"-{Sz_int}/2"
+
 # ── Tabs ───────────────────────────────────────────────────────
-tab_sim, tab_zeeman, tab_impl = st.tabs(["Hubbard Simulator", "Zeeman Analysis", "Numerical Implementation"])
+tab_sim, tab_zeeman = st.tabs(["Hubbard Simulator", "Zeeman Analysis"])
 
 # ══════════════════════════════════════════════════════════════
 # TAB 1 — Hubbard Simulator
@@ -467,172 +517,128 @@ with tab_sim:
         unsafe_allow_html=True,
     )
 
-    # ── Sz = 0 Subspace ────────────────────────────────────────
-    st.markdown('<p class="sec-lbl" style="margin-top:2rem;">S<sub>z</sub> = 0 Subspace</p>',
-                unsafe_allow_html=True)
-
-    dim_sz0 = math.comb(2 * N, N)
-
-    st.markdown(f"""
-<div class="caption-box" style="margin-bottom:1rem;">
-  Restrict to states where the total spin projection
-  <b>S<sub>z</sub> = &frac12;(N<sub>&uarr;</sub> &minus; N<sub>&darr;</sub>) = 0</b>,
-  i.e. equal numbers of spin-up and spin-down electrons.<br><br>
-  Each site can be <b>&middot;</b>&thinsp;(empty),&ensp;
-  <b>&uarr;</b>&thinsp;(spin-up),&ensp;
-  <b>&darr;</b>&thinsp;(spin-down),&ensp;or&ensp;
-  <b>&uarr;&darr;</b>&thinsp;(doubly occupied).<br><br>
-  We label each sector by an integer <b>k</b>, defined as:<br>
-  &emsp;<b>k = N<sub>&uarr;</sub> = N<sub>&darr;</sub></b>
-  &ensp;&mdash;&ensp; the number of spin-up electrons,
-  which must equal the number of spin-down electrons.<br>
-  <em>k</em> ranges from 0 (all sites empty) to N (all sites doubly occupied).<br><br>
-  For a given <em>k</em> there are C(N,k) ways to place the k spin-up electrons on N sites,
-  and independently C(N,k) ways for the k spin-down electrons, giving
-  C(N,k)<sup>2</sup> states. Summing over all <em>k</em>:<br>
-  <span style="font-size:1.05rem;">
-    <b>D = &sum;<sub>k=0</sub><sup>N</sup> C(N,k)&sup2; = C(2N, N)
-    = C({2*N},&thinsp;{N}) = {dim_sz0:,}</b>
-  </span>
-  &nbsp;&nbsp;(by Vandermonde&rsquo;s identity)
-</div>
-""", unsafe_allow_html=True)
-
-    tbl_rows_html = "".join(
-        f'<tr style="border-bottom:1px solid #DDD5C8;">'
-        f'<td style="padding:9px 18px;color:#2A2018;text-align:center;">{k}</td>'
-        f'<td style="padding:9px 18px;color:#2A2018;text-align:center;">{math.comb(N,k)}</td>'
-        f'<td style="padding:9px 18px;color:#2A2018;text-align:center;font-weight:600;">'
-        f'{math.comb(N,k)**2}</td>'
-        f'</tr>'
-        for k in range(N + 1)
+    # ── Numerical ED ─────────────────────────────────────────────
+    st.markdown(
+        '<p class="sec-lbl" style="margin-top:2rem;">'
+        'Numerical Exact Diagonalization &mdash; Square Lattice (PBC)</p>',
+        unsafe_allow_html=True,
     )
-    tbl_html = f"""
-<div style="border-radius:10px;overflow:hidden;border:1px solid #C8BDA8;margin-bottom:0.3rem;">
-<table style="width:100%;border-collapse:collapse;background:#FFFFFF;">
-  <thead>
-    <tr style="background:#F0E8DA;border-bottom:2px solid #C8BDA8;">
-      <th style="padding:10px 18px;color:#4E3428;font-size:0.82rem;font-weight:700;text-align:center;">
-        k &nbsp;=&nbsp; N<sub>↑</sub> &nbsp;=&nbsp; N<sub>↓</sub></th>
-      <th style="padding:10px 18px;color:#4E3428;font-size:0.82rem;font-weight:700;text-align:center;">
-        C(N, k) &nbsp;&mdash;&nbsp; ways to place k ↑ electrons on N sites</th>
-      <th style="padding:10px 18px;color:#4E3428;font-size:0.82rem;font-weight:700;text-align:center;">
-        C(N, k)² &nbsp;&mdash;&nbsp; states in this k-sector</th>
-    </tr>
-  </thead>
-  <tbody>{tbl_rows_html}</tbody>
-</table>
-</div>
-"""
 
-    with st.expander("States per k-sector  (each row = one value of N↑ = N↓)", expanded=True):
-        st.markdown(tbl_html, unsafe_allow_html=True)
+    _cD, _cJ = st.columns([3, 2])
+    with _cD:
+        _ed_D = st.slider("Lattice size  D × D", 2, 6, 2, 1, key="ed_D")
+    with _cJ:
+        _ed_J = st.slider("Exchange coupling  J", 0.5, 3.0, 1.0, 0.1, key="ed_J")
+    _ed_N = _ed_D * _ed_D
+    st.markdown(
+        f'<p style="color:{T["txt_mute"]};font-size:0.84rem;margin:-0.3rem 0 0.6rem;">'
+        f'{_ed_D}&times;{_ed_D} lattice &nbsp;&middot;&nbsp; N = {_ed_N} sites '
+        f'&nbsp;&middot;&nbsp; Hilbert dim. = 2<sup>{_ed_N}</sup>'
+        f' = {2**_ed_N:,}</p>',
+        unsafe_allow_html=True,
+    )
 
-    if N <= 4:
-        by_k: dict = {}
-        for idx, k, occ in gen_states(N):
-            by_k.setdefault(k, []).append((idx, occ))
-        legend_html = "".join(
-            f'<div style="display:flex;align-items:center;gap:5px;font-size:0.78rem;'
-            f'color:{T["txt_mute"]};">'
-            f'{badge_html(v)}'
-            f'{"Empty" if v==0 else "Spin-up" if v==1 else "Spin-down" if v==2 else "Doubly occ."}'
-            f'</div>'
-            for v in range(4)
-        )
-        rows_html = []
-        for k in range(N + 1):
-            ck = math.comb(N, k)
-            rows_html.append(
-                f'<div style="font-size:0.72rem;color:{T["txt_mute"]};text-transform:uppercase;'
-                f'letter-spacing:1px;border-bottom:1px solid {T["border"]};'
-                f'padding:5px 0 3px;margin:10px 0 4px;">'
-                f'k = {k} &ensp;(N<sub>&uarr;</sub> = N<sub>&darr;</sub> = {k})'
-                f'&ensp;&middot;&ensp; C({N},{k})<sup>2</sup> = {ck}<sup>2</sup>'
-                f' = {ck*ck} states</div>'
-            )
-            states = by_k.get(k, [])
-            for i in range(0, len(states), 4):
-                cells = "".join(
-                    f'<div style="display:flex;align-items:center;gap:3px;margin:2px 8px 2px 0;">'
-                    f'<span style="font-size:0.66rem;color:{T["txt_mute"]};width:18px;'
-                    f'text-align:right;flex-shrink:0;">{si}</span>'
-                    + "".join(badge_html(v) for v in occ)
-                    + f'</div>'
-                    for si, occ in states[i:i+4]
-                )
-                rows_html.append(f'<div style="display:flex;flex-wrap:wrap;">{cells}</div>')
-        full_html = (
-            f'<div style="background:{T["card_bg"]};border:1px solid {T["border"]};'
-            f'border-radius:12px;padding:1rem 1.4rem;max-height:560px;overflow-y:auto;">'
-            f'<div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:0.9rem;">'
-            f'{legend_html}</div>'
-            + "".join(rows_html)
-            + f'</div>'
-        )
-        with st.expander(
-            f"All {dim_sz0} basis states — {D}×{D} lattice, N = {N} sites", expanded=True
-        ):
-            st.markdown(full_html, unsafe_allow_html=True)
-
-    elif N <= 9:
-        MAX_S = 200
-        z_data, x_labs, k_starts = [], [], {}
-        for idx, k, occ in gen_states(N, limit=MAX_S):
-            if k not in k_starts:
-                k_starts[k] = idx
-            z_data.append(occ)
-            x_labs.append(str(idx))
-        z_T      = [list(col) for col in zip(*z_data)]
-        custom_T = [[BADGE_SYM[v] for v in row] for row in z_T]
-        cs = [
-            [0.000, "#D8D0C4"], [0.249, "#D8D0C4"],
-            [0.250, SAGE],      [0.499, SAGE],
-            [0.500, ROSE],      [0.749, ROSE],
-            [0.750, SLATE],     [1.000, SLATE],
-        ]
-        fig_h = go.Figure(go.Heatmap(
-            z=z_T, x=x_labs,
-            y=[f"Site {s}" for s in range(N)],
-            colorscale=cs, zmin=0, zmax=3, showscale=False,
-            customdata=custom_T,
-            hovertemplate="<b>State %{x}</b> · %{y}: <b>%{customdata}</b><extra></extra>",
-            xgap=1, ygap=1,
-        ))
-        for k, start in sorted(k_starts.items()):
-            if start > 0:
-                fig_h.add_vline(x=start - 0.5, line=dict(color=T["border"], width=1.5))
-            fig_h.add_annotation(
-                x=start + 0.3, y=1.06,
-                text=f"k={k}  (N↑=N↓={k})",
-                xanchor="left", showarrow=False, yref="paper",
-                font=dict(color=T["txt_mute"], size=9),
-            )
-        fig_h.update_layout(
-            paper_bgcolor=T["page_bg"], plot_bgcolor=T["plot_bg"],
-            height=50 * N + 80, margin=dict(l=65, r=20, t=35, b=45),
-            xaxis=dict(title=dict(text="State index", font=dict(color=T["txt_mute"], size=11)),
-                       showticklabels=len(z_data) <= 40,
-                       tickfont=dict(color=T["txt_mute"], size=9)),
-            yaxis=dict(tickfont=dict(color=T["txt_main"], size=10), autorange="reversed"),
-            hoverlabel=dict(bgcolor=T["hover_bg"], bordercolor=T["border"],
-                            font=dict(color=T["hover_txt"], size=12)),
-        )
-        n_shown = len(z_data)
-        label = f"First {n_shown} of {dim_sz0:,}" if n_shown < dim_sz0 else f"All {dim_sz0:,}"
-        with st.expander(
-            f"Basis states — {D}×{D} lattice  ({label} states)", expanded=True
-        ):
-            st.plotly_chart(fig_h, use_container_width=True)
-            if n_shown < dim_sz0:
-                st.caption(f"Showing first {n_shown} of {dim_sz0:,} Sz=0 states.")
-
-    else:
+    _MAX_ED_N = 16
+    if _ed_N > _MAX_ED_N:
+        _sz0_dim = math.comb(_ed_N, _ed_N // 2) if _ed_N % 2 == 0 else math.comb(_ed_N, (_ed_N + 1) // 2)
         st.markdown(
             f'<div class="caption-box">'
-            f'For N = {N} sites the Sz=0 sector has <b>{dim_sz0:,}</b> states — '
-            f'too large to enumerate in the browser. '
-            f'See the breakdown table above for the structure by electron number <em>k</em>.'
+            f'N = {_ed_N} sites: the largest S<sub>z</sub> block contains '
+            f'<b>{_sz0_dim:,}</b> states &mdash; too large for real-time exact diagonalization '
+            f'in the browser. Maximum supported size: 4×4 (N = 16).'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        with st.spinner(f"Diagonalising {_ed_D}×{_ed_D} Heisenberg lattice (PBC)…"):
+            _ed_evals = _ed_spectrum(_ed_D, _ed_J)
+
+        # ── Eigenvalue cards (one per Sz sector) ───────────────
+        _ev_sorted = sorted(_ed_evals.items())
+        _ncols = min(len(_ev_sorted), 5)
+        _ev_cols = st.columns(_ncols)
+        _CARD_COLORS = [SAGE, AMBER, BUTTER, STEEL, ROSE, MOSS, SLATE, TERRA, DARK_BRN]
+        for _ci, (Sz_int, evals) in enumerate(_ev_sorted):
+            _lbl = _sz_label(Sz_int)
+            _dim_c = math.comb(_ed_N, (_ed_N + Sz_int) // 2)
+            _ev_str = ",&ensp;".join(f"{v / _ed_J:.4g}" for v in evals)
+            _cc = _CARD_COLORS[_ci % len(_CARD_COLORS)]
+            with _ev_cols[_ci % _ncols]:
+                st.markdown(
+                    f'<div class="z-card" style="border-left:3px solid {_cc};">'
+                    f'<b>Sz = {_lbl}</b>&nbsp;'
+                    f'<small style="color:{T["txt_mute"]}">dim = {_dim_c}</small><br>'
+                    f'<small style="color:{T["txt_mute"]}">E / J =</small><br>'
+                    f'<span style="font-size:0.80rem;font-family:monospace;">{_ev_str}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+        # ── Energy vs H/J plot ─────────────────────────────────
+        _HJ = np.linspace(0.0, 10.0, 600)
+        fig_ed = go.Figure()
+        _all_lines = []
+        _ic = 0
+        for Sz_int, evals in _ev_sorted:
+            E0J = float(evals[0]) / _ed_J
+            _col = _CARD_COLORS[_ic % len(_CARD_COLORS)]
+            _lbl_p = _sz_label(Sz_int)
+            Sz = Sz_int / 2.0
+            _line_p = E0J - _HJ * Sz
+            fig_ed.add_trace(go.Scatter(
+                x=_HJ, y=_line_p, mode="lines",
+                name=f"Sz = {_lbl_p}",
+                line=dict(color=_col, width=1.8),
+            ))
+            _all_lines.append(_line_p)
+            if Sz_int > 0:
+                _lbl_n = _sz_neg_label(Sz_int)
+                _line_n = E0J + _HJ * Sz
+                fig_ed.add_trace(go.Scatter(
+                    x=_HJ, y=_line_n, mode="lines",
+                    name=f"Sz = {_lbl_n}",
+                    line=dict(color=_col, width=1.2, dash="dash"),
+                ))
+                _all_lines.append(_line_n)
+            _ic += 1
+
+        _gs_line = np.min(np.array(_all_lines), axis=0)
+        fig_ed.add_trace(go.Scatter(
+            x=_HJ, y=_gs_line, mode="lines",
+            name="Ground state",
+            line=dict(color=OFF_WHT if dark_mode else DARK_BRN, width=3),
+        ))
+        fig_ed.update_layout(
+            paper_bgcolor=T["page_bg"], plot_bgcolor=T["plot_bg"],
+            height=440, margin=dict(l=60, r=20, t=30, b=50),
+            xaxis=dict(
+                title="H / J", range=[0, 10],
+                tickfont=dict(color=T["txt_mute"], size=10),
+                title_font=dict(color=T["txt_mute"]),
+            ),
+            yaxis=dict(
+                title="E / J",
+                tickfont=dict(color=T["txt_mute"], size=10),
+                title_font=dict(color=T["txt_mute"]),
+            ),
+            legend=dict(
+                bgcolor=T["card_bg"], bordercolor=T["border"],
+                font=dict(color=T["txt_main"], size=10),
+                tracegroupgap=2,
+            ),
+            hoverlabel=dict(bgcolor=T["hover_bg"], font=dict(color=T["hover_txt"])),
+        )
+        st.plotly_chart(fig_ed, use_container_width=True)
+        st.markdown(
+            f'<div class="caption-box">'
+            f'Solid lines: S<sub>z</sub> &ge; 0 sectors '
+            f'(energy decreases or stays flat with H). '
+            f'Dashed lines: S<sub>z</sub> &lt; 0 mirror '
+            f'via time-reversal symmetry — E(&minus;S<sub>z</sub>) = E(+S<sub>z</sub>) '
+            f'at H = 0. '
+            f'Heavy curve: overall ground state. '
+            f'Eigenvalues from NumPy LAPACK (block dim &le; 500) '
+            f'or SciPy Lanczos sparse solver (larger blocks).'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -1322,232 +1328,3 @@ sparse Krylov (Lanczos) methods, and eventually to DMRG or quantum Monte Carlo.
         )
 
 # ══════════════════════════════════════════════════════════════
-# TAB 3 — Numerical Implementation
-# ══════════════════════════════════════════════════════════════
-with tab_impl:
-
-    st.markdown(f"""
-<div class="hero">
-  <h1 style="font-size:1.6rem;">Numerical Implementation Guide</h1>
-  <p>
-    Two essential techniques for scaling exact diagonalization beyond small systems:
-    <strong>Sz block diagonalization</strong> to shrink the working matrix, and
-    <strong>sparse solvers</strong> to handle the matrices that remain.
-  </p>
-</div>
-""", unsafe_allow_html=True)
-
-    # ── Block diagonalization ───────────────────────────────────
-    st.markdown('<p class="sec-lbl">1 · Sz Block Diagonalization</p>',
-                unsafe_allow_html=True)
-
-    with st.expander("Solve Ĥ within blocks of fixed Sz to reduce matrix size", expanded=True):
-        st.markdown(r"""
-Because $[\hat{H},\,\hat{S}^z_{\rm total}] = 0$, the Hamiltonian is **block-diagonal** in the
-total spin projection $S_z$.  Rather than diagonalising the full $2^N \times 2^N$ matrix, one
-solves $N+1$ independent sub-problems — one per $S_z$ sector.
-
-**Why this matters:**
-
-| Quantity | Full space | $S_z = 0$ block only |
-|:---|:---:|:---:|
-| States | $2^N$ | $\binom{N}{N/2}$ |
-| Matrix entries | $4^N$ | $\binom{N}{N/2}^2$ |
-| Memory (float64) at $N = 20$ | $\sim$1 TB | $\sim$270 GB |
-| Memory (float64) at $N = 16$ | $\sim$32 GB | $\sim$1.2 GB |
-
-Working sector by sector reduces both memory and CPU time by a factor of roughly $\sqrt{2/\pi N}$
-(Stirling estimate of the binomial peak).
-
-**Implementation pattern:**
-""")
-        st.code("""\
-from itertools import combinations
-import numpy as np
-
-def enumerate_basis(N, Nup):
-    \"\"\"All spin-1/2 basis states with exactly Nup up-spins on N sites.\"\"\"
-    return [tuple(1 if i in up else 0 for i in range(N))
-            for up in combinations(range(N), Nup)]
-
-def build_hamiltonian(J, basis, bonds):
-    \"\"\"Build Heisenberg H matrix for a given Sz sector.\"\"\"
-    n = len(basis)
-    H = np.zeros((n, n))
-    idx = {s: i for i, s in enumerate(basis)}
-    for row, state in enumerate(basis):
-        for (a, b) in bonds:
-            sz_a = 0.5 if state[a] else -0.5
-            sz_b = 0.5 if state[b] else -0.5
-            H[row, row] += J * sz_a * sz_b          # Ising diagonal
-            if state[a] != state[b]:                 # flip-flop off-diagonal
-                lst = list(state); lst[a], lst[b] = lst[b], lst[a]
-                ns = tuple(lst)
-                if ns in idx:
-                    H[row, idx[ns]] += J * 0.5
-    return H
-
-# 2x2 square lattice with PBC — bonds
-N     = 4
-bonds = [(0,1),(1,3),(3,2),(2,0)]   # ring equivalent to 2x2 PBC
-
-# Solve each Sz sector independently
-spectra = {}
-for Nup in range(N + 1):
-    Sz  = Nup - N / 2               # Sz = Nup - Ndown)/2
-    basis = enumerate_basis(N, Nup)
-    H     = build_hamiltonian(1.0, basis, bonds)
-    evals = np.sort(np.linalg.eigvalsh(H))
-    spectra[Sz] = evals
-    print(f"Sz = {Sz:+.1f}  dim = {len(basis):4d}  E_min/J = {evals[0]:.6f}")
-""", language="python")
-
-        st.markdown(f"""
-<div class="caption-box">
-  Running the snippet above on the 2×2 lattice reproduces the analytical spectrum from
-  Section 4 of the Zeeman Analysis tab exactly. The same pattern extends to any
-  $N$ and any lattice geometry — just change <code>N</code> and <code>bonds</code>.
-</div>
-""", unsafe_allow_html=True)
-
-    # ── Sparse matrices ─────────────────────────────────────────
-    st.markdown('<p class="sec-lbl">2 · Sparse Matrices for N &gt; 20</p>',
-                unsafe_allow_html=True)
-
-    with st.expander("scipy.sparse.linalg.eigsh — find lowest eigenvalues without storing the full matrix",
-                     expanded=True):
-        st.markdown(r"""
-For $N > 20$ the $S_z = 0$ block alone exceeds $\sim10^5$ states and cannot be stored as a
-dense array.  Instead, represent $\hat{H}$ as a **sparse matrix** (only the non-zero entries
-are stored) and use the **Lanczos / ARPACK** iterative eigensolver to find the few lowest
-eigenvalues without ever forming the full matrix.
-""")
-        st.code("""\
-import numpy as np
-import scipy.sparse as sp
-import scipy.sparse.linalg as spla
-from itertools import combinations
-
-def build_sparse_hamiltonian(J, basis, bonds):
-    \"\"\"Build Heisenberg H as a scipy sparse COO matrix.\"\"\"
-    idx = {s: i for i, s in enumerate(basis)}
-    n   = len(basis)
-    rows, cols, data = [], [], []
-
-    for row, state in enumerate(basis):
-        for (a, b) in bonds:
-            sz_a = 0.5 if state[a] else -0.5
-            sz_b = 0.5 if state[b] else -0.5
-            # Diagonal Ising term
-            rows.append(row); cols.append(row)
-            data.append(J * sz_a * sz_b)
-            # Off-diagonal flip-flop term
-            if state[a] != state[b]:
-                lst = list(state); lst[a], lst[b] = lst[b], lst[a]
-                ns = tuple(lst)
-                if ns in idx:
-                    rows.append(row); cols.append(idx[ns])
-                    data.append(J * 0.5)
-
-    return sp.csr_matrix((data, (rows, cols)), shape=(n, n))
-
-# Example: 16-site chain, Sz = 0 sector
-N     = 16
-bonds = [(i, (i+1) % N) for i in range(N)]   # periodic 1D chain
-basis = [tuple(1 if i in up else 0 for i in range(N))
-         for up in combinations(range(N), N // 2)]
-
-H_sparse = build_sparse_hamiltonian(1.0, basis, bonds)
-print(f"Block dimension: {H_sparse.shape[0]:,}")
-print(f"Non-zero entries: {H_sparse.nnz:,}  (density {H_sparse.nnz/H_sparse.shape[0]**2:.2e})")
-
-# Find 6 lowest eigenvalues — no dense matrix needed
-evals, _ = spla.eigsh(H_sparse, k=6, which="SA")   # SA = smallest algebraic
-print("Lowest eigenvalues E/J:", np.sort(evals))
-""", language="python")
-
-        st.markdown(
-            f'<div class="caption-box">'
-            f'<code>eigsh</code> (symmetric/Hermitian) is preferred over <code>eigs</code> for spin '
-            f'Hamiltonians because H&#770; is real-symmetric. The <code>which="SA"</code> flag '
-            f'("smallest algebraic") targets the ground state and low-lying excitations directly, '
-            f'so runtime is independent of the block dimension &mdash; only the number of requested '
-            f'eigenvalues <code>k</code> matters.'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-    with st.expander("QuSpin — purpose-built ED library for quantum lattice models", expanded=True):
-        st.markdown(r"""
-**QuSpin** provides a higher-level interface that handles basis construction, symmetry
-reduction, and matrix-vector products automatically.  It is especially convenient for
-lattice models with translation, reflection, or spin-inversion symmetry, which can
-shrink the working block by another factor of $N$ or more.
-""")
-        st.code("""\
-# Install: pip install quspin
-from quspin.operators import hamiltonian
-from quspin.basis   import spin_basis_1d
-import numpy as np
-
-# 4-site Heisenberg ring (same as our 2x2 analytic case)
-N = 4
-J = 1.0
-
-# Build the spin-1/2 basis restricted to Sz = 0
-basis = spin_basis_1d(N, Nup=N//2)   # Nup = N/2 → Sz = 0 sector
-
-# Define coupling lists: [[strength, site_i, site_j], ...]
-Jzz = [[J, i, (i+1) % N] for i in range(N)]   # Sz Sz
-Jpm = [[J/2, i, (i+1) % N] for i in range(N)] # S+ S-
-Jmp = [[J/2, i, (i+1) % N] for i in range(N)] # S- S+
-
-static  = [["zz", Jzz], ["+-", Jpm], ["-+", Jmp]]
-dynamic = []
-
-H = hamiltonian(static, dynamic, basis=basis, dtype=np.float64)
-evals = H.eigvalsh()   # dense diagonalisation
-print("Sz=0 eigenvalues E/J:", np.round(evals, 6))
-# → [-2.  -1.   0.   0.   0.   1.]  ✓
-""", language="python")
-
-        st.markdown(f"""
-<div class="caption-box">
-  For larger systems replace <code>spin_basis_1d</code> with <code>spin_basis_general</code>
-  (arbitrary lattice geometry) and call <code>H.eigsh(k=6, which="SA")</code> instead of
-  <code>H.eigvalsh()</code> to use the sparse Lanczos solver.
-</div>
-""", unsafe_allow_html=True)
-
-    # ── Resources ───────────────────────────────────────────────
-    st.markdown('<p class="sec-lbl">3 · Online Resources</p>',
-                unsafe_allow_html=True)
-
-    st.markdown(f"""
-<div class="z-card" style="margin-top:0.4rem;">
-  <b style="color:{T['accent']};">QuSpin</b>
-  &ensp;&mdash;&ensp; exact diagonalization &amp; dynamics for quantum lattice models<br>
-  <a href="https://weinbe58.github.io/QuSpin/" target="_blank"
-     style="color:{T['accent']};font-family:monospace;">
-    https://weinbe58.github.io/QuSpin/
-  </a><br>
-  <span style="color:{T['txt_mute']};font-size:0.85rem;">
-    Covers spin chains, Hubbard models, and Floquet systems.
-    Includes tutorials on symmetry-reduced bases, sparse solvers, and time evolution.
-  </span>
-</div>
-
-<div class="z-card" style="margin-top:0.6rem;">
-  <b style="color:{T['accent']};">SciPy Sparse Linear Algebra</b>
-  &ensp;&mdash;&ensp; <code>scipy.sparse.linalg.eigsh</code><br>
-  <a href="https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.eigsh.html"
-     target="_blank" style="color:{T['accent']};font-family:monospace;">
-    docs.scipy.org &rarr; scipy.sparse.linalg.eigsh
-  </a><br>
-  <span style="color:{T['txt_mute']};font-size:0.85rem;">
-    ARPACK-backed Lanczos solver. Works on any real-symmetric sparse matrix.
-    Key parameters: <code>k</code> (number of eigenvalues), <code>which="SA"</code>
-    (smallest algebraic — ground state), <code>tol</code> (convergence).
-  </span>
-</div>
-""", unsafe_allow_html=True)
