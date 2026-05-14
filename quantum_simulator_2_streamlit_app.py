@@ -501,6 +501,21 @@ with tab_sim:
         'Numerical Analysis &mdash; Square Lattice Heisenberg Model</p>',
         unsafe_allow_html=True,
     )
+    st.markdown(
+        f'<p style="color:{T["txt_mute"]};font-size:0.90rem;line-height:1.7;margin:0.3rem 0 1rem;">'
+        f'This section bridges manual calculation and numerical simulation for the '
+        f'square-lattice Heisenberg model '
+        f'<em>H&#770; = J&thinsp;&sum;<sub>&lang;i,j&rang;</sub> '
+        f'<b>S</b>&#770;<sub>i</sub>&middot;<b>S</b>&#770;<sub>j</sub> '
+        f'&minus; H&thinsp;&sum;<sub>i</sub> S&#770;<sup>z</sup><sub>i</sub></em>. '
+        f'Select a lattice size, set the exchange coupling J and field range, '
+        f'then inspect the exact eigenvalues per S<sub>z</sub> sector and the resulting '
+        f'average magnetisation &#x27E8;M<sub>z</sub>&#x27E9; = S<sub>z</sub>/N '
+        f'as a function of H/J — revealing the characteristic <em>magnetisation plateaus</em> '
+        f'that arise as the ground state steps through successive S<sub>z</sub> sectors.'
+        f'</p>',
+        unsafe_allow_html=True,
+    )
 
     # ── Controls ──────────────────────────────────────────────────
     _lat_opts = {"2 × 2  (N = 4)": 2,
