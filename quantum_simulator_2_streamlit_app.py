@@ -604,46 +604,55 @@ with tab_sim:
             unsafe_allow_html=True,
         )
 
-    # ── Eigenvalue sector cards ────────────────────────────────────
-    st.markdown('<p class="sec-lbl">Eigenvalues by S<sub>z</sub> Sector  (S<sub>z</sub> ≥ 0)</p>',
-                unsafe_allow_html=True)
-    _CARD_COLORS = [SAGE, AMBER, BUTTER, STEEL, ROSE, MOSS, SLATE, TERRA, DARK_BRN]
-    _ncols_h  = min(len(_ev_sorted), 6)
-    _ev_cols_h = st.columns(_ncols_h)
-    for _ci, (Sz_int, _data) in enumerate(_ev_sorted):
-        _lbl = _sz_label(Sz_int)
-        _cc  = _CARD_COLORS[_ci % len(_CARD_COLORS)]
-        if _data["skipped"]:
-            _body = (
-                f'<span style="font-size:0.78rem;color:{T["txt_mute"]};">'
-                f'dim = {_data["dim"]:,}<br>'
-                f'<em>skipped (dim &gt; 2M)</em></span>'
-            )
-        else:
-            _ev_str = ",&ensp;".join(f"{v / _heis_J:.4g}" for v in _data["evals"])
-            _body = (
-                f'<small style="color:{T["txt_mute"]}">dim = {_data["dim"]:,}</small><br>'
-                f'<small style="color:{T["txt_mute"]}">E / J =</small><br>'
-                f'<span style="font-size:0.78rem;font-family:monospace;">{_ev_str}</span>'
-            )
-        with _ev_cols_h[_ci % _ncols_h]:
-            st.markdown(
-                f'<div class="z-card" style="border-left:3px solid {_cc};">'
-                f'<b>Sz = {_lbl}</b>&nbsp;{_body}'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+    # ── Eigenvalues & Eigenvectors (collapsible) ─────────────────
+    with st.expander(
+        "Eigenvalues & Ground-State Eigenvectors per S\u1d63 Sector",
+        expanded=False,
+    ):
+        st.markdown(
+            '<p class="sec-lbl" style="margin-top:0;">'
+            'Eigenvalues by S<sub>z</sub> Sector &nbsp;(S<sub>z</sub> \u2265 0)</p>',
+            unsafe_allow_html=True,
+        )
+        _CARD_COLORS = [SAGE, AMBER, BUTTER, STEEL, ROSE, MOSS, SLATE, TERRA, DARK_BRN]
+        _ncols_h   = min(len(_ev_sorted), 6)
+        _ev_cols_h = st.columns(_ncols_h)
+        for _ci, (Sz_int, _data) in enumerate(_ev_sorted):
+            _lbl = _sz_label(Sz_int)
+            _cc  = _CARD_COLORS[_ci % len(_CARD_COLORS)]
+            if _data["skipped"]:
+                _body = (
+                    f'<span style="font-size:0.78rem;color:{T["txt_mute"]};">'
+                    f'dim = {_data["dim"]:,}<br>'
+                    f'<em>skipped (dim &gt; 2M)</em></span>'
+                )
+            else:
+                _ev_str = ",&ensp;".join(f"{v / _heis_J:.4g}" for v in _data["evals"])
+                _body = (
+                    f'<small style="color:{T["txt_mute"]}">dim = {_data["dim"]:,}</small><br>'
+                    f'<small style="color:{T["txt_mute"]}">E / J =</small><br>'
+                    f'<span style="font-size:0.78rem;font-family:monospace;">{_ev_str}</span>'
+                )
+            with _ev_cols_h[_ci % _ncols_h]:
+                st.markdown(
+                    f'<div class="z-card" style="border-left:3px solid {_cc};">'
+                    f'<b>Sz = {_lbl}</b>&nbsp;{_body}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
 
-    # ── Eigenvectors ──────────────────────────────────────────────
-    with st.expander("Ground-State Eigenvectors  |ψ₀⟩ per Sᵤ Sector", expanded=False):
+        st.markdown(
+            f'<p class="sec-lbl" style="margin-top:1.2rem;">'
+            f'Ground-State Eigenvectors &nbsp;|\u03c8\u2080\u27e9 per S<sub>z</sub> Sector</p>',
+            unsafe_allow_html=True,
+        )
         st.markdown(
             f'<p style="color:{T["txt_mute"]};font-size:0.84rem;margin:0 0 0.7rem;">'
             f'Each column shows the dominant basis-state amplitudes of the ground-state '
-            f'eigenvector in that S<sub>z</sub> sector.  '
-            f'Spin states are written as |s<sub>0</sub>s<sub>1</sub>…s<sub>N-1</sub>⟩ '
-            f'with ↑ = spin-up (1) and ↓ = spin-down (0), site-index order matching '
-            f'the lattice rows left-to-right, top-to-bottom.  '
-            f'For large blocks only the 8 largest |amplitude| components are shown.</p>',
+            f'eigenvector in that S<sub>z</sub> sector. '
+            f'Spin states: \u2191 = spin-up, \u2193 = spin-down, site-index order '
+            f'left-to-right top-to-bottom. '
+            f'Only the 8 largest |amplitude| components are shown for large blocks.</p>',
             unsafe_allow_html=True,
         )
         _vec_cols = st.columns(min(len(_ev_sorted), 4))
@@ -660,32 +669,32 @@ with tab_sim:
                         unsafe_allow_html=True,
                     )
                     continue
-                _top = _data["evecs_top"][0]   # ground-state eigenvector
+                _top   = _data["evecs_top"][0]
                 _shown = min(len(_top), 8)
-                _rows = ""
+                _rows  = ""
                 for _coeff, _state in _top[:_shown]:
                     if abs(_coeff) < 5e-5:
                         continue
-                    _spins = "".join("↑" if s else "↓" for s in _state)
-                    _sign  = "+" if _coeff >= 0 else "−"
+                    _spins = "".join("\u2191" if s else "\u2193" for s in _state)
+                    _sign  = "+" if _coeff >= 0 else "\u2212"
                     _rows += (
                         f'<tr><td style="font-family:monospace;font-size:0.78rem;'
                         f'color:{T["txt_main"]};padding-right:0.5rem;">'
                         f'{_sign}{abs(_coeff):.4f}</td>'
                         f'<td style="font-family:monospace;font-size:0.78rem;'
-                        f'color:{T["accent"]};">|{_spins}⟩</td></tr>'
+                        f'color:{T["accent"]};">|{_spins}\u27e9</td></tr>'
                     )
                 _more = _data["dim"] - _shown
                 _more_note = (
                     f'<tr><td colspan="2" style="font-size:0.74rem;color:{T["txt_mute"]};">'
-                    f'… {_more:,} more components</td></tr>'
+                    f'\u2026 {_more:,} more components</td></tr>'
                     if _more > 0 else ""
                 )
                 st.markdown(
                     f'<div class="z-card" style="border-left:3px solid {_cc};padding-bottom:0.6rem;">'
                     f'<b>Sz = {_lbl}</b>'
                     f'<small style="color:{T["txt_mute"]}"> &nbsp;dim={_data["dim"]:,}'
-                    f'&nbsp; E₀/J={_data["E0"]/_heis_J:.4g}</small><br>'
+                    f'&nbsp; E\u2080/J={_data["E0"]/_heis_J:.4g}</small><br>'
                     f'<table style="margin-top:0.4rem;border-collapse:collapse;">'
                     f'{_rows}{_more_note}</table>'
                     f'</div>',
@@ -990,6 +999,7 @@ with tab_sim:
         )
 
 
+
 # ══════════════════════════════════════════════════════════════
 # TAB 2 — BEC Mixture Calculator
 # ══════════════════════════════════════════════════════════════
@@ -997,72 +1007,115 @@ with tab_bec:
     import scipy.constants as _sc
     from scipy.optimize import fsolve as _fsolve
     import matplotlib.pyplot as _plt
-    import matplotlib.patches as _mp
 
     # ── Physics solver ────────────────────────────────────────────
     @st.cache_data(show_spinner=False)
-    def _solve_tf(mB_amu, mF_amu, fB_Hz, fF_Hz, NB, NF, aB_nm, aF_nm, aBF_nm, n_pts=400):
+    def _solve_tf(mB_amu, mF_amu, fB_Hz, fF_Hz, NB, NF, aB_nm, aF_nm, aBF_nm, n_pts=500):
         """
         Thomas-Fermi solver for a two-component BEC mixture in a 3-D spherical trap.
 
-        Assumptions
-        -----------
-        * Thomas-Fermi approximation (kinetic energy << interaction energy; valid when N·a/a_ho >> 1).
-        * Spherically symmetric harmonic traps (ω_x = ω_y = ω_z = ω_i).
-        * Zero temperature, ground state only.
-        * Both components are weakly interacting bosons (mean-field GPE).
-        * Local density approximation: interspecies coupling is treated pointwise.
+        Regime map (D = gBB*gFF - gBF**2):
+          aBF = 0              : Non-interacting  (independent TF parabolas)
+          aBF < 0, D > 0       : Attractive – stable  (coupled TF, profiles compressed)
+          aBF < 0, D <= 0      : Attractive – collapse risk  (single-species, warning)
+          aBF > 0, D > 0       : Miscible repulsive  (coupled TF, profiles expanded)
+          aBF > 0, D <= 0      : Phase-separated  (exclusive-occupation / core-shell)
 
-        Coupling constants (SI)
-        -----------------------
-          g_BB = 4π ℏ² a_B  / m_B
-          g_FF = 4π ℏ² a_F  / m_F
-          g_BF = 2π ℏ² a_BF (1/m_B + 1/m_F)
-
-        Miscibility condition: g_BF² < g_BB · g_FF
-
-        Chemical potentials μ_B, μ_F are found by enforcing ∫4πr² n_i dr = N_i.
+        Phase-separated local density: at each r the species with the higher
+        intraspecies pressure P_i = g_ii * n_i_ss^2 occupies that point exclusively.
+        This is the correct LDA treatment of demixing in the TF limit.
         """
-        hbar = _sc.hbar;  kB = _sc.k;  amu = _sc.u
-        mB  = mB_amu * amu;  mF  = mF_amu * amu
-        wB  = 2*np.pi*fB_Hz; wF  = 2*np.pi*fF_Hz
-        aB  = aB_nm * 1e-9;  aF  = aF_nm * 1e-9;  aBF = aBF_nm * 1e-9
+        hbar = _sc.hbar
+        amu  = _sc.u
+        mB   = mB_amu * amu
+        mF   = mF_amu * amu
+        wB   = 2 * np.pi * fB_Hz
+        wF   = 2 * np.pi * fF_Hz
+        aB   = aB_nm  * 1e-9
+        aF   = aF_nm  * 1e-9
+        aBF  = aBF_nm * 1e-9
 
-        gBB = 4*np.pi*hbar**2 * aB  / mB
-        gFF = 4*np.pi*hbar**2 * aF  / mF
-        gBF = 2*np.pi*hbar**2 * aBF * (1/mB + 1/mF)
+        gBB = 4 * np.pi * hbar**2 * aB  / mB
+        gFF = 4 * np.pi * hbar**2 * aF  / mF
+        gBF = 2 * np.pi * hbar**2 * aBF * (1.0/mB + 1.0/mF)
 
-        a_ho_B = np.sqrt(hbar / (mB*wB))
-        a_ho_F = np.sqrt(hbar / (mF*wF))
+        D = gBB * gFF - gBF**2
 
-        # Initial μ guess from single-species TF result
-        mu_B0 = hbar*wB/2 * max((15*NB*abs(aB)/a_ho_B)**(2/5), 0.1)
-        mu_F0 = hbar*wF/2 * max((15*NF*abs(aF)/a_ho_F)**(2/5), 0.1)
-        r_max = max(np.sqrt(2*mu_B0/(mB*wB**2)), np.sqrt(2*mu_F0/(mF*wF**2))) * 1.8
-        r = np.linspace(0, r_max, n_pts)
+        # ── Regime classification ─────────────────────────────────
+        if abs(aBF_nm) < 1e-3:
+            regime    = "Non-interacting"
+            miscible  = True
+        elif aBF_nm < 0:
+            if D > 0:
+                regime   = "Attractive (stable)"
+                miscible = True
+            else:
+                regime   = "Attractive (collapse risk)"
+                miscible = False
+        else:
+            if D > 0:
+                regime   = "Miscible (repulsive)"
+                miscible = True
+            else:
+                regime   = "Phase-separated"
+                miscible = False
 
+        # ── Harmonic oscillator length & initial mu guesses ───────
+        a_ho_B = np.sqrt(hbar / (mB * wB))
+        a_ho_F = np.sqrt(hbar / (mF * wF))
+        mu_B0  = hbar * wB / 2 * max((15 * NB * abs(aB) / a_ho_B)**(2/5), 0.1)
+        mu_F0  = hbar * wF / 2 * max((15 * NF * abs(aF) / a_ho_F)**(2/5), 0.1)
+        r_max  = max(np.sqrt(2*mu_B0 / (mB*wB**2)),
+                     np.sqrt(2*mu_F0 / (mF*wF**2))) * 2.0
+        r = np.linspace(0.0, r_max, n_pts)
+
+        # ── Local density at radius ri ────────────────────────────
         def _local(ri, muB, muF):
-            VB = 0.5*mB*wB**2*ri**2;  VF = 0.5*mF*wF**2*ri**2
-            D  = gBB*gFF - gBF**2
-            if abs(D) < 1e-55:
-                return max(0., (muB-VB)/gBB), max(0., (muF-VF)/gFF)
-            nB = (gFF*(muB-VB) - gBF*(muF-VF)) / D
-            nF = (gBB*(muF-VF) - gBF*(muB-VB)) / D
-            if nB < 0 and nF < 0:  return 0., 0.
-            if nB < 0:             return 0., max(0., (muF-VF)/gFF)
-            if nF < 0:             return max(0., (muB-VB)/gBB), 0.
+            VB    = 0.5 * mB * wB**2 * ri**2
+            VF    = 0.5 * mF * wF**2 * ri**2
+            nBss  = max(0.0, (muB - VB) / gBB)   # single-species TF
+            nFss  = max(0.0, (muF - VF) / gFF)
+
+            if regime == "Non-interacting":
+                return nBss, nFss
+
+            if regime == "Phase-separated":
+                # Exclusive occupation: species with higher intraspecies pressure wins
+                # P_i = g_ii * n_i^2 / 2  (energy density of that species alone)
+                PB = gBB * nBss * nBss
+                PF = gFF * nFss * nFss
+                return (nBss, 0.0) if PB >= PF else (0.0, nFss)
+
+            if regime == "Attractive (collapse risk)":
+                # Mean-field is unstable; show single-species profiles as approximation
+                return nBss, nFss
+
+            # Miscible regimes: coupled TF equations (D > 0 guaranteed here)
+            nB = (gFF * (muB - VB) - gBF * (muF - VF)) / D
+            nF = (gBB * (muF - VF) - gBF * (muB - VB)) / D
+
+            if nB < 0 and nF < 0:
+                return 0.0, 0.0
+            if nB < 0:
+                return 0.0, nFss
+            if nF < 0:
+                return nBss, 0.0
             return nB, nF
 
         def _profiles(muB, muF):
-            nb, nf = np.zeros(n_pts), np.zeros(n_pts)
+            nb = np.zeros(n_pts)
+            nf = np.zeros(n_pts)
             for i, ri in enumerate(r):
                 nb[i], nf[i] = _local(ri, muB, muF)
             return nb, nf
 
         def _res(mus):
             nb, nf = _profiles(mus[0], mus[1])
-            return [(4*np.pi*np.trapz(nb*r**2, r) - NB)/NB,
-                    (4*np.pi*np.trapz(nf*r**2, r) - NF)/NF]
+            NB_got = 4 * np.pi * np.trapz(nb * r**2, r)
+            NF_got = 4 * np.pi * np.trapz(nf * r**2, r)
+            dB = (NB_got - NB) / NB if NB > 0 else 0.0
+            dF = (NF_got - NF) / NF if NF > 0 else 0.0
+            return [dB, dF]
 
         try:
             sol, _, flag, _ = _fsolve(_res, [mu_B0, mu_F0], full_output=True)[:4]
@@ -1073,24 +1126,29 @@ with tab_bec:
         nb, nf = _profiles(muB, muF)
 
         def _rtf(n_arr):
-            m = n_arr > n_arr.max()*1e-4
-            return float(r[m][-1])*1e6 if m.any() else 0.
+            mx = n_arr.max()
+            if mx <= 0:
+                return 0.0
+            mask = n_arr > mx * 1e-4
+            return float(r[mask][-1]) * 1e6 if mask.any() else 0.0
 
-        miscible = bool(gBF**2 < gBB*gFF)
         return dict(
-            r_um   = r*1e6,
-            nB     = nb*1e-6,   # cm⁻³
-            nF     = nf*1e-6,
-            R_B    = _rtf(nb),  # µm
-            R_F    = _rtf(nf),
-            n0_B   = float(nb[0])*1e-6,
-            n0_F   = float(nf[0])*1e-6,
-            muB_nK = muB/(_sc.k*1e-9),
-            muF_nK = muF/(_sc.k*1e-9),
-            gBF    = gBF, gBB=gBB, gFF=gFF,
-            miscible = miscible,
-            regime   = "Miscible" if miscible else "Phase-separated",
-            a_ho_B_um = float(np.sqrt(_sc.hbar/(mB_amu*_sc.u * 2*np.pi*fB_Hz)))*1e6,
+            r_um      = r * 1e6,
+            nB        = nb * 1e-6,
+            nF        = nf * 1e-6,
+            R_B       = _rtf(nb),
+            R_F       = _rtf(nf),
+            n0_B      = float(nb[0]) * 1e-6,
+            n0_F      = float(nf[0]) * 1e-6,
+            muB_nK    = muB / (_sc.k * 1e-9),
+            muF_nK    = muF / (_sc.k * 1e-9),
+            gBF       = gBF,
+            gBB       = gBB,
+            gFF       = gFF,
+            D         = D,
+            miscible  = miscible,
+            regime    = regime,
+            a_ho_B_um = float(np.sqrt(_sc.hbar / (mB_amu*_sc.u * 2*np.pi*fB_Hz))) * 1e6,
         )
 
     # ── Header ────────────────────────────────────────────────────
@@ -1100,8 +1158,8 @@ with tab_bec:
   <p>
     Two-component Bose-Einstein condensate in a 3-D spherical harmonic trap.
     Solve the coupled Thomas-Fermi equations to obtain density profiles n<sub>B</sub>(r),
-    n<sub>F</sub>(r) and compare the non-interacting, weak-interacting, and phase-separation
-    regimes for negative, zero, and positive interspecies scattering length a<sub>BF</sub>.
+    n<sub>F</sub>(r) and compare four physically distinct regimes:
+    non-interacting, attractive (stable), miscible repulsive, and phase-separated.
   </p>
 </div>
 """, unsafe_allow_html=True)
@@ -1109,66 +1167,73 @@ with tab_bec:
     # ── Assumptions expander ──────────────────────────────────────
     with st.expander("Model & Assumptions", expanded=False):
         st.markdown(r"""
-**Thomas-Fermi (TF) approximation** — kinetic energy is neglected; valid when
-$N\,a/a_{ho} \gg 1$.  The Gross-Pitaevskii energy functional reduces to local algebraic
-equations for the densities.
-
-**Coupled TF equations** (spherical trap, 3-D):
-
-$$
-n_B(r) = \frac{g_{FF}\bigl(\mu_B - V_B(r)\bigr) - g_{BF}\bigl(\mu_F - V_F(r)\bigr)}{g_{BB}g_{FF} - g_{BF}^2},
-\qquad
-n_F(r) = \frac{g_{BB}\bigl(\mu_F - V_F(r)\bigr) - g_{BF}\bigl(\mu_B - V_B(r)\bigr)}{g_{BB}g_{FF} - g_{BF}^2}
-$$
-
-with $V_i(r)=\tfrac{1}{2}m_i\omega_i^2 r^2$.  Densities are clamped to zero where negative
-(phase-separated boundary approximation).
+**Thomas-Fermi (TF) approximation** — kinetic energy neglected; valid when $N\,a/a_{ho}\gg 1$.
 
 **Coupling constants (SI):**
-$\;g_{BB}=4\pi\hbar^2 a_B/m_B,\quad g_{FF}=4\pi\hbar^2 a_F/m_F,\quad
-g_{BF}=2\pi\hbar^2 a_{BF}(m_B^{-1}+m_F^{-1}).$
+$$g_{BB}=\frac{4\pi\hbar^2 a_B}{m_B},\quad g_{FF}=\frac{4\pi\hbar^2 a_F}{m_F},\quad
+g_{BF}=2\pi\hbar^2 a_{BF}\!\left(\frac{1}{m_B}+\frac{1}{m_F}\right)$$
 
-**Miscibility condition:** $g_{BF}^2 < g_{BB}\,g_{FF}$. Violation → phase separation.
+**Regime map** — let $D = g_{BB}g_{FF}-g_{BF}^2$:
 
-**Chemical potentials** $\mu_B,\,\mu_F$ are found numerically by enforcing
-$4\pi\int_0^\infty n_i(r)\,r^2\,dr = N_i$.
-        """)
+| $a_{BF}$ | sign of $g_{BF}$ | $D$ | Regime |
+|----------|-----------------|-----|--------|
+| 0 | — | + | Non-interacting |
+| < 0 | negative (attractive) | > 0 | Attractive – stable (miscible) |
+| < 0 | negative (attractive) | ≤ 0 | Attractive – collapse risk |
+| > 0 | positive (repulsive) | > 0 | Miscible repulsive |
+| > 0 | positive (repulsive) | ≤ 0 | **Phase-separated** (core-shell) |
+
+**Phase-separation solver:** In the immiscible ($D\le 0$, $g_{BF}>0$) regime the species demix
+spatially. At each radius $r$ only the species with the higher intraspecies pressure
+$P_i = g_{ii}\,n_i^{(0)}(r)^2$ occupies that point; the other is zero.
+This exclusive-occupation rule is the LDA implementation of the Thomas-Fermi demixing condition
+and produces the experimentally observed core-shell structure.
+
+**Chemical potentials** $\mu_B,\mu_F$ are found by enforcing
+$4\pi\!\int_0^\infty n_i(r)\,r^2\,dr=N_i$.
+""")
 
     # ── Parameter inputs ──────────────────────────────────────────
     st.markdown('<p class="sec-lbl">Parameters</p>', unsafe_allow_html=True)
     _c1, _c2, _c3 = st.columns(3)
     with _c1:
         st.markdown("**Species B** (e.g. ⁸⁷Rb)")
-        _mB  = st.number_input("m_B (amu)",          1.0,  300.0, 87.0,  1.0,  key="bec_mB")
-        _fB  = st.number_input("ω_B / 2π  (Hz)",     1.0, 2000.0, 100.0, 10.0, key="bec_fB")
-        _NB  = st.number_input("N_B  (atoms)",        100, 500000, 50000, 1000, key="bec_NB")
-        _aB  = st.number_input("a_B (nm)",            0.01, 50.0,  5.29,  0.1,  key="bec_aB",
-                                help="⁸⁷Rb: a_B ≈ 5.29 nm (100 a₀)")
+        _mB = st.number_input("m_B (amu)",       1.0,  300.0,  87.0, 1.0,  key="bec_mB")
+        _fB = st.number_input("ω_B / 2π  (Hz)", 1.0, 2000.0, 100.0, 10.0, key="bec_fB")
+        _NB = st.number_input("N_B  (atoms)",    100,  500000, 50000, 1000, key="bec_NB")
+        _aB = st.number_input("a_B (nm)",        0.01, 50.0,   5.29,  0.1,  key="bec_aB",
+                               help="⁸⁷Rb: a_B ≈ 5.29 nm (100 a₀)")
     with _c2:
         st.markdown("**Species F** (e.g. ⁴¹K)")
-        _mF  = st.number_input("m_F (amu)",          1.0,  300.0, 41.0,  1.0,  key="bec_mF")
-        _fF  = st.number_input("ω_F / 2π  (Hz)",     1.0, 2000.0, 150.0, 10.0, key="bec_fF")
-        _NF  = st.number_input("N_F  (atoms)",        100, 500000, 30000, 1000, key="bec_NF")
-        _aF  = st.number_input("a_F (nm)",            0.01, 50.0,  3.39,  0.1,  key="bec_aF",
-                                help="⁴¹K: a_F ≈ 3.39 nm (64 a₀)")
+        _mF = st.number_input("m_F (amu)",       1.0,  300.0,  41.0, 1.0,  key="bec_mF")
+        _fF = st.number_input("ω_F / 2π  (Hz)", 1.0, 2000.0, 150.0, 10.0, key="bec_fF")
+        _NF = st.number_input("N_F  (atoms)",    100,  500000, 30000, 1000, key="bec_NF")
+        _aF = st.number_input("a_F (nm)",        0.01, 50.0,   3.39,  0.1,  key="bec_aF",
+                               help="⁴¹K: a_F ≈ 3.39 nm (64 a₀)")
     with _c3:
-        st.markdown("**Interspecies a_BF values**")
-        _aBF_neg  = st.number_input("a_BF  attractive (nm)", -300.0, -0.01, -5.0,  0.5, key="bec_n")
-        _aBF_weak = st.number_input("a_BF  weak repulsive (nm)", 0.01, 50.0,  5.0,  0.5, key="bec_w")
-        _aBF_sep  = st.number_input("a_BF  phase-sep (nm)",      1.0, 500.0, 50.0, 5.0, key="bec_s")
-        st.caption("a_BF = 0 (non-interacting) is always included.")
-        _scan_lo = st.number_input("Scan min (nm)", -100.0,  0.0, -30.0, 1.0, key="bec_slo")
-        _scan_hi = st.number_input("Scan max (nm)",   0.0, 300.0,  60.0, 1.0, key="bec_shi")
-        _n_scan  = st.slider("Scan points", 5, 40, 20, key="bec_nscan")
+        st.markdown("**Interspecies scattering lengths**")
+        _aBF_neg  = st.number_input(
+            "a_BF attractive (nm)", -300.0, -0.01, -3.0, 0.5, key="bec_n",
+            help="Negative: g_BF < 0. Stable while |g_BF| < sqrt(g_BB*g_FF).")
+        _aBF_weak = st.number_input(
+            "a_BF miscible repulsive (nm)", 0.01, 300.0, 2.0, 0.5, key="bec_w",
+            help="Positive and small: g_BF > 0, D > 0 (miscible).")
+        _aBF_sep  = st.number_input(
+            "a_BF phase-sep (nm)", 0.01, 500.0, 10.0, 1.0, key="bec_s",
+            help="Large positive: g_BF^2 > g_BB*g_FF triggers phase separation.")
+        st.caption("a_BF = 0 (non-interacting) is always included as the baseline.")
+        _scan_lo = st.number_input("Scan min (nm)", -50.0,  0.0, -10.0, 1.0, key="bec_slo")
+        _scan_hi = st.number_input("Scan max (nm)",   0.0, 300.0, 15.0, 1.0, key="bec_shi")
+        _n_scan  = st.slider("Scan points", 5, 60, 30, key="bec_nscan")
 
-    # ── Solve four cases ──────────────────────────────────────────
+    # ── Solve four representative cases ───────────────────────────
+    _case_aBF    = [0.0, float(_aBF_neg), float(_aBF_weak), float(_aBF_sep)]
     _case_labels = [
         "Non-interacting\n(a_BF = 0)",
         f"Attractive\n(a_BF = {_aBF_neg:.1f} nm)",
-        f"Weak repulsive\n(a_BF = {_aBF_weak:.1f} nm)",
+        f"Miscible repulsive\n(a_BF = {_aBF_weak:.1f} nm)",
         f"Phase separation\n(a_BF = {_aBF_sep:.1f} nm)",
     ]
-    _case_aBF = [0.0, float(_aBF_neg), float(_aBF_weak), float(_aBF_sep)]
 
     with st.spinner("Solving Thomas-Fermi equations…"):
         _results = {
@@ -1176,36 +1241,56 @@ $4\pi\int_0^\infty n_i(r)\,r^2\,dr = N_i$.
             for lbl, abf in zip(_case_labels, _case_aBF)
         }
 
-    # ── Coupling constants display ────────────────────────────────
-    st.markdown('<p class="sec-lbl">Coupling Constants  g = 4πℏ²a/m</p>',
+    # ── Coupling constants & miscibility display ──────────────────
+    st.markdown('<p class="sec-lbl">Coupling Constants &amp; Miscibility</p>',
                 unsafe_allow_html=True)
-    _ref0 = _results[_case_labels[0]]
-    _gBB_SI, _gFF_SI = _ref0["gBB"], _ref0["gFF"]
-    _misc_g = float(np.sqrt(_gBB_SI * _gFF_SI))
+    _ref0      = _results[_case_labels[0]]
+    _gBB_SI    = _ref0["gBB"]
+    _gFF_SI    = _ref0["gFF"]
+    _misc_thr  = float(np.sqrt(_gBB_SI * _gFF_SI))
 
     def _g_fmt(g):
         if g == 0:
             return "0 J·m³"
-        exp = int(np.floor(np.log10(abs(g))))
+        exp      = int(np.floor(np.log10(abs(g))))
         mantissa = g / 10**exp
         return f"{mantissa:.3f}&thinsp;&times;&thinsp;10<sup>{exp}</sup> J·m³"
 
-    _gbf_rows = "".join(
-        f'<li><b>{lbl.replace(chr(10), " ")}</b>: '
-        f'g<sub>BF</sub> = {_g_fmt(_results[lbl]["gBF"])} '
-        f'&rarr; <em>{"miscible" if _results[lbl]["miscible"] else "phase-separated"}</em></li>'
-        for lbl in _case_labels
+    # Compute critical aBF for display
+    _aBF_crit_nm = None
+    if _gBB_SI > 0 and _gFF_SI > 0:
+        _coeff = 2 * np.pi * _sc.hbar**2 * (1.0/(_mB*_sc.u) + 1.0/(_mF*_sc.u))
+        _aBF_crit_nm = float(_misc_thr / _coeff) * 1e9
+
+    _gbf_rows = ""
+    for lbl in _case_labels:
+        _res = _results[lbl]
+        _sym = "✓" if _res["miscible"] else "✗"
+        _col = "#5a8a5a" if _res["miscible"] else "#a84e3c"
+        _gbf_rows += (
+            f'<li><b>{lbl.replace(chr(10), " ")}</b>: '
+            f'g<sub>BF</sub> = {_g_fmt(_res["gBF"])}&ensp;&mdash;&ensp;'
+            f'<span style="color:{_col};font-weight:600;">'
+            f'{_sym} {_res["regime"]}</span></li>'
+        )
+
+    _crit_str = (
+        f'Critical |a<sub>BF</sub>| = {_aBF_crit_nm:.2f} nm '
+        f'(above this threshold: attractive side → collapse risk; '
+        f'repulsive side → phase separation)'
+        if _aBF_crit_nm else ""
     )
     st.markdown(
         f'<div class="caption-box">'
-        f'<b>g<sub>BB</sub></b> = {_g_fmt(_gBB_SI)} &nbsp;&nbsp;'
+        f'<b>g<sub>BB</sub></b> = {_g_fmt(_gBB_SI)}&ensp;&ensp;'
         f'<b>g<sub>FF</sub></b> = {_g_fmt(_gFF_SI)}<br>'
-        f'Miscibility threshold &nbsp;√(g<sub>BB</sub>&thinsp;g<sub>FF</sub>) = {_g_fmt(_misc_g)}'
-        f'<ul style="margin:0.5rem 0 0;padding-left:1.4rem;">{_gbf_rows}</ul>'
-        f'<small style="color:{T["txt_mute"]}">g<sub>BB</sub>=4πℏ²a<sub>B</sub>/m<sub>B</sub>, '
-        f'g<sub>FF</sub>=4πℏ²a<sub>F</sub>/m<sub>F</sub>, '
-        f'g<sub>BF</sub>=2πℏ²a<sub>BF</sub>(m<sub>B</sub><sup>-1</sup>+m<sub>F</sub><sup>-1</sup>). '
-        f'Phase separation when g<sub>BF</sub>² &gt; g<sub>BB</sub>g<sub>FF</sub>.</small>'
+        f'Miscibility threshold &nbsp;√(g<sub>BB</sub> g<sub>FF</sub>) = '
+        f'{_g_fmt(_misc_thr)}'
+        f'{"<br>" + _crit_str if _crit_str else ""}'
+        f'<ul style="margin:0.6rem 0 0;padding-left:1.4rem;">{_gbf_rows}</ul>'
+        f'<small style="color:{T["txt_mute"]};">'
+        f'Phase separation only for <em>positive</em> g<sub>BF</sub> exceeding the threshold. '
+        f'Negative g<sub>BF</sub> drives attraction, not demixing.</small>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -1213,17 +1298,18 @@ $4\pi\int_0^\infty n_i(r)\,r^2\,dr = N_i$.
     # ── Plot 1: density profiles ──────────────────────────────────
     st.markdown('<p class="sec-lbl">Density Profiles</p>', unsafe_allow_html=True)
 
-    _fig1, _axes = _plt.subplots(1, 4, figsize=(16, 4))
+    _fig1, _axes = _plt.subplots(1, 4, figsize=(16, 4.2), sharey=False)
     _fig1.patch.set_facecolor("none")
     for _ax, (_lbl, _res) in zip(_axes, _results.items()):
-        _ax.plot(_res["r_um"], _res["nB"], color=SAGE,  lw=2.0, label="Species B")
-        _ax.plot(_res["r_um"], _res["nF"], color=ROSE,  lw=2.0, label="Species F", ls="--")
+        _r   = _res["r_um"]
+        _nBp = _res["nB"]
+        _nFp = _res["nF"]
+        _ax.plot(_r, _nBp, color=SAGE, lw=2.2, label="Species B (⁸⁷Rb)")
+        _ax.plot(_r, _nFp, color=ROSE, lw=2.2, label="Species F (⁴¹K)", ls="--")
         _ax.set_facecolor("none")
-        _ax.set_xlabel("r  (μm)", fontsize=8)
-        _ax.set_ylabel("n  (cm⁻³)", fontsize=8)
-        _ax.tick_params(labelsize=7)
-        for _sp in _ax.spines.values(): _sp.set_color(OFF_WHT)
-        _ax.tick_params(colors=DARK_BRN)
+        for _sp in _ax.spines.values():
+            _sp.set_color(OFF_WHT)
+        _ax.tick_params(colors=DARK_BRN, labelsize=7)
         _ax.set_xlabel("r  (μm)", fontsize=8, color=DARK_BRN)
         _ax.set_ylabel("n  (cm⁻³)", fontsize=8, color=DARK_BRN)
         _title = _lbl.replace("\n", "  ") + f"\n[{_res['regime']}]"
@@ -1231,23 +1317,32 @@ $4\pi\int_0^\infty n_i(r)\,r^2\,dr = N_i$.
         _ax.legend(fontsize=6.5, facecolor=OFF_WHT, edgecolor=OFF_WHT, labelcolor=DARK_BRN)
         for _R, _col in [(_res["R_B"], SAGE), (_res["R_F"], ROSE)]:
             if _R > 0:
-                _ax.axvline(_R, color=_col, lw=0.8, ls=":", alpha=0.7)
+                _ax.axvline(_R, color=_col, lw=0.8, ls=":", alpha=0.65)
+        # Collapse-risk warning banner
+        if _res["regime"] == "Attractive (collapse risk)":
+            _ax.text(0.5, 0.92, "⚠ Collapse risk", transform=_ax.transAxes,
+                     ha="center", va="top", fontsize=7, color=TERRA,
+                     bbox=dict(boxstyle="round,pad=0.2", fc=OFF_WHT, ec=TERRA, lw=0.8))
     _fig1.tight_layout()
     st.pyplot(_fig1, use_container_width=True)
     _plt.close(_fig1)
     st.caption(
-        f"Fixed parameters — B ({_mB} amu, ω_B/2π = {_fB} Hz, N_B = {int(_NB)}, "
-        f"a_B = {_aB} nm); F ({_mF} amu, ω_F/2π = {_fF} Hz, N_F = {int(_NF)}, a_F = {_aF} nm). "
-        "Dotted vertical lines: Thomas-Fermi radii R_TF for each species. "
-        "Assumption: 3-D spherical trap, zero temperature, Thomas-Fermi approximation (N·a/a_ho ≫ 1)."
+        f"Species B: ⁸⁷Rb ({_mB} amu, ω_B/2π = {_fB} Hz, "
+        f"N_B = {int(_NB)}, a_B = {_aB} nm).  "
+        f"Species F: ⁴¹K ({_mF} amu, ω_F/2π = {_fF} Hz, "
+        f"N_F = {int(_NF)}, a_F = {_aF} nm).  "
+        "Dotted verticals: Thomas-Fermi radii.  "
+        "Phase-separated panel uses exclusive-occupation LDA: at each r only the "
+        "species with higher intraspecies pressure P = g_ii × n_i² is present, "
+        "producing the core-shell structure."
     )
 
     # ── Plot 2: scan over a_BF ────────────────────────────────────
-    st.markdown('<p class="sec-lbl">TF Radius & Peak Density vs a_BF</p>',
+    st.markdown('<p class="sec-lbl">TF Radius &amp; Peak Density vs a<sub>BF</sub></p>',
                 unsafe_allow_html=True)
-    _aBF_arr = np.linspace(_scan_lo, _scan_hi, int(_n_scan))
+    _aBF_arr = np.linspace(float(_scan_lo), float(_scan_hi), int(_n_scan))
     with st.spinner("Running a_BF scan…"):
-        _scan = [_solve_tf(_mB, _mF, _fB, _fF, _NB, _NF, _aB, _aF, float(_a), n_pts=250)
+        _scan = [_solve_tf(_mB, _mF, _fB, _fF, _NB, _NF, _aB, _aF, float(_a), n_pts=300)
                  for _a in _aBF_arr]
 
     _fig2, (_ax_r, _ax_n) = _plt.subplots(1, 2, figsize=(12, 4))
@@ -1255,18 +1350,23 @@ $4\pi\int_0^\infty n_i(r)\,r^2\,dr = N_i$.
     for _axx in (_ax_r, _ax_n):
         _axx.set_facecolor("none")
         _axx.tick_params(colors=DARK_BRN, labelsize=8)
-        for _sp in _axx.spines.values(): _sp.set_color(OFF_WHT)
-        _axx.axvline(0, color=OFF_WHT, lw=0.8, ls="--")
+        for _sp in _axx.spines.values():
+            _sp.set_color(OFF_WHT)
+        _axx.axvline(0, color=DARK_BRN, lw=0.7, ls="--", alpha=0.5, label="a_BF = 0")
+        if _aBF_crit_nm:
+            _axx.axvline( _aBF_crit_nm, color=AMBER, lw=0.9, ls=":", alpha=0.8,
+                          label=f"a_crit = +{_aBF_crit_nm:.1f} nm")
+            _axx.axvline(-_aBF_crit_nm, color=AMBER, lw=0.9, ls=":", alpha=0.8)
 
-    _ax_r.plot(_aBF_arr, [s["R_B"] for s in _scan], color=SAGE, lw=2, label="R_TF  (B)")
-    _ax_r.plot(_aBF_arr, [s["R_F"] for s in _scan], color=ROSE, lw=2, ls="--", label="R_TF  (F)")
+    _ax_r.plot(_aBF_arr, [s["R_B"] for s in _scan], color=SAGE,  lw=2.0, label="R_TF (B)")
+    _ax_r.plot(_aBF_arr, [s["R_F"] for s in _scan], color=ROSE,  lw=2.0, ls="--", label="R_TF (F)")
     _ax_r.set_xlabel("a_BF  (nm)", color=DARK_BRN)
     _ax_r.set_ylabel("Thomas-Fermi radius  (μm)", color=DARK_BRN)
     _ax_r.set_title("TF Radii vs a_BF", color=DARK_BRN)
     _ax_r.legend(facecolor=OFF_WHT, edgecolor=OFF_WHT, labelcolor=DARK_BRN, fontsize=8)
 
-    _ax_n.plot(_aBF_arr, [s["n0_B"] for s in _scan], color=SAGE, lw=2, label="n₀  (B)")
-    _ax_n.plot(_aBF_arr, [s["n0_F"] for s in _scan], color=ROSE, lw=2, ls="--", label="n₀  (F)")
+    _ax_n.plot(_aBF_arr, [s["n0_B"] for s in _scan], color=SAGE,  lw=2.0, label="n₀ (B)")
+    _ax_n.plot(_aBF_arr, [s["n0_F"] for s in _scan], color=ROSE,  lw=2.0, ls="--", label="n₀ (F)")
     _ax_n.set_xlabel("a_BF  (nm)", color=DARK_BRN)
     _ax_n.set_ylabel("Peak density  (cm⁻³)", color=DARK_BRN)
     _ax_n.set_title("Peak Density vs a_BF", color=DARK_BRN)
@@ -1275,14 +1375,18 @@ $4\pi\int_0^\infty n_i(r)\,r^2\,dr = N_i$.
     _fig2.tight_layout()
     st.pyplot(_fig2, use_container_width=True)
     _plt.close(_fig2)
+    _crit_note = (
+        f"Amber dotted verticals mark the miscibility threshold |a_BF| = {_aBF_crit_nm:.1f} nm.  "
+        if _aBF_crit_nm else ""
+    )
     st.caption(
-        f"Scan over a_BF ∈ [{_scan_lo:.0f}, {_scan_hi:.0f}] nm with all other parameters fixed "
-        f"(same as density-profile plots above). "
-        "Left: as a_BF → negative (attractive, g_BF < 0) both R_TF shrink and peak densities rise — "
-        "mutual attraction compresses the clouds; beyond a critical |a_BF| the mixture collapses. "
-        "As a_BF → positive (repulsive, g_BF > 0) R_TF expand and peak densities fall; "
-        "once g_BF² > g_BB·g_FF the clouds demix (phase separation) and the profiles split "
-        "into core/shell geometry — evident as a kink or plateau in the curves."
+        f"Scan over a_BF ∈ [{_scan_lo:.0f}, {_scan_hi:.0f}] nm.  "
+        + _crit_note
+        + "Left of zero (attractive): both clouds compress — R_TF shrinks, n₀ rises. "
+        "Beyond the negative threshold the mean-field becomes unstable (collapse).  "
+        "Right of zero (repulsive): clouds swell until the threshold, then demix into "
+        "core-shell geometry — the core species peak density jumps while the shell species "
+        "density at r = 0 drops toward zero."
     )
 
     # ── Summary table ─────────────────────────────────────────────
@@ -1291,44 +1395,61 @@ $4\pi\int_0^\infty n_i(r)\,r^2\,dr = N_i$.
     for _lbl, _res in _results.items():
         _abf_v = _case_aBF[_case_labels.index(_lbl)]
         _tbl.append({
-            "Case":           _lbl.replace("\n", " "),
-            "a_BF (nm)":      f"{_abf_v:.1f}",
-            "Regime":         _res["regime"],
-            "R_TF B (μm)":   f"{_res['R_B']:.2f}",
-            "R_TF F (μm)":   f"{_res['R_F']:.2f}",
-            "n₀_B (cm⁻³)":   f"{_res['n0_B']:.3e}",
-            "n₀_F (cm⁻³)":   f"{_res['n0_F']:.3e}",
-            "μ_B (nK)":      f"{_res['muB_nK']:.1f}",
-            "μ_F (nK)":      f"{_res['muF_nK']:.1f}",
+            "Case":          _lbl.replace("\n", " "),
+            "a_BF (nm)":     f"{_abf_v:.1f}",
+            "Regime":        _res["regime"],
+            "R_TF B (μm)": f"{_res['R_B']:.2f}",
+            "R_TF F (μm)": f"{_res['R_F']:.2f}",
+            "n₀_B (cm⁻³)": f"{_res['n0_B']:.3e}",
+            "n₀_F (cm⁻³)": f"{_res['n0_F']:.3e}",
+            "μ_B (nK)":  f"{_res['muB_nK']:.1f}",
+            "μ_F (nK)":  f"{_res['muF_nK']:.1f}",
         })
     st.dataframe(pd.DataFrame(_tbl), use_container_width=True, hide_index=True)
 
     # ── Physics commentary ────────────────────────────────────────
     with st.expander("Physics Commentary", expanded=True):
+        _a_ho_str = f"{_results[_case_labels[0]]['a_ho_B_um']:.3f}"
+        _crit_str2 = (
+            f"The miscibility threshold is $|a_{{BF}}^{{\\rm crit}}| \\approx {_aBF_crit_nm:.2f}$~nm."
+            if _aBF_crit_nm else ""
+        )
         st.markdown(f"""
-**Chosen parameters** — Species B: $^{{87}}$Rb ({_mB} amu, $\\omega_B/2\\pi={_fB}$ Hz,
-$N_B={_NB}$, $a_B={_aB}$ nm); Species F: $^{{41}}$K ({_mF} amu, $\\omega_F/2\\pi={_fF}$ Hz,
-$N_F={_NF}$, $a_F={_aF}$ nm). Harmonic oscillator length
-$a_{{ho}}^B \\approx {_results[_case_labels[0]]['a_ho_B_um']:.3f}\\,\\mu$m.
+**Chosen parameters** &mdash; B: $^{{87}}$Rb ({_mB} amu, $\\omega_B/2\\pi={_fB}$ Hz,
+$N_B={int(_NB)}$, $a_B={_aB}$ nm); F: $^{{41}}$K ({_mF} amu, $\\omega_F/2\\pi={_fF}$ Hz,
+$N_F={int(_NF)}$, $a_F={_aF}$ nm).
+Harmonic oscillator length $a_{{ho}}^B \\approx {_a_ho_str}\\,\\mu$m.
+{_crit_str2}
 
 ---
 
-**Non-interacting ($a_{{BF}}=0$):** Each species forms an independent inverted-parabola profile.
-The TF radius is $R_{{TF}}^i = a_{{ho}}^i\\,(15 N_i a_i/a_{{ho}}^i)^{{1/5}}$ and the peak density
-$n_0^i = \\mu_i / g_{{ii}}$ depends only on intraspecies interactions.
+**Non-interacting ($a_{{BF}}=0$):** Species B and F are completely independent.
+Each forms its own Thomas-Fermi inverted-parabola profile
+$n_i(r) = \\max\\!\\left(0,\\,\\frac{{\\mu_i - V_i(r)}}{{g_{{ii}}}}\\right)$.
+The TF radius is $R_{{TF}}^i = a_{{ho}}^i(15N_ia_i/a_{{ho}}^i)^{{1/5}}$.
 
-**Attractive ($a_{{BF}}<0$, $g_{{BF}}<0$):** Interspecies attraction pulls the clouds together,
-increasing spatial overlap.  The effective chemical potential rises for both species, *compressing*
-each cloud.  $R_{{TF}}$ **decreases** and $n_0$ **increases** as $|a_{{BF}}|$ grows.
-Beyond a critical attraction the mixture becomes mechanically unstable (mean-field collapse).
+**Attractive ($a_{{BF}}<0$, $g_{{BF}}<0$):** Interspecies attraction is a
+*negative* contribution to the interaction energy matrix.  The species pull each
+other toward the trap centre: both $R_{{TF}}$ **shrink** and peak densities
+**rise** as $|a_{{BF}}|$ increases.  The system remains stable as long as
+$g_{{BF}}^2 < g_{{BB}}g_{{FF}}$ (i.e. $D>0$).  Once $D\\le 0$ the mean-field is
+mechanically unstable and the mixture **collapses** &mdash; this is not phase
+separation.  (Profiles shown in the collapse-risk panel are single-species TF
+curves used as an approximation; the true solution diverges.)
 
-**Weak repulsion ($a_{{BF}}>0$, small):** Mutual repulsion swells each cloud outward.
-$R_{{TF}}$ **increases** and $n_0$ **decreases** moderately relative to the non-interacting case.
+**Miscible repulsive ($a_{{BF}}>0$, $D>0$):** Interspecies repulsion pushes the
+clouds apart.  Both $R_{{TF}}$ **expand** and peak densities **decrease**
+moderately relative to the non-interacting baseline.  Spatial overlap is reduced
+but both species still co-exist everywhere.
 
-**Phase separation ($g_{{BF}}^2 > g_{{BB}}g_{{FF}}$, large positive $a_{{BF}}$):**
-The miscibility condition is violated.  The species demix: one occupies the core, the other
-a surrounding shell.  The species with the smaller TF radius (tighter confinement or fewer atoms)
-is typically squeezed to the centre.  The peak density of the *expelled* species at $r=0$ drops
-toward zero, while the *core* species density there rises.  The TF radius of the core species
-*shrinks* and that of the shell species *expands*.
-        """)
+**Phase-separated ($a_{{BF}}>0$, $D\\le 0$):** The repulsive cross-interaction
+exceeds the geometric mean of the intraspecies interactions.  The coupled
+Thomas-Fermi equations no longer have a positive-definite solution at every
+point; the energetically favoured state is **spatial demixing**.  In the LDA
+implementation, at each radius $r$ only the species with the higher intraspecies
+pressure $P_i = g_{{ii}}\\,n_i^{{(0)}}(r)^2$ is present.  The result is a
+**core-shell structure**: the species with stronger self-repulsion (larger
+$g_{{ii}}N_i$) occupies the centre, while the other is expelled to a surrounding
+shell.  The core-species density at $r=0$ rises; the expelled-species density
+there drops toward zero.
+""")
