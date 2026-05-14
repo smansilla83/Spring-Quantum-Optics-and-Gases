@@ -268,7 +268,10 @@ def _ed_spectrum(D, J):
     """
     Lowest eigenvalues per Sz>=0 sector for D×D Heisenberg square lattice (PBC).
 
-    Returns dict: Sz_int → {"E0": float|None, "evals": ndarray, "dim": int, "skipped": bool}
+    Returns dict: Sz_int → {"E0": float|None, "evals": ndarray, "dim": int,
+                             "skipped": bool, "evecs_top": list}
+    evecs_top[j] = list of (coeff, state_tuple) for the top-8 components of eigenvector j,
+    sorted by |coeff| descending.
     Each undirected bond is listed as both (a,b) and (b,a), so all matrix elements
     carry an implicit ×2 relative to the single-sum convention; all E/J ratios and
     plateau positions are internally consistent.
@@ -278,6 +281,7 @@ def _ed_spectrum(D, J):
     import scipy.sparse.linalg as _spla
     N = D * D
     _MAX_BLOCK = 2_000_000
+    _N_TOP     = 8          # dominant components to store per eigenvector
     bonds = []
     for r in range(D):
         for c in range(D):
@@ -289,7 +293,8 @@ def _ed_spectrum(D, J):
         Sz_int = 2 * Nup - N
         dim = math.comb(N, Nup)
         if dim > _MAX_BLOCK:
-            result[Sz_int] = {"E0": None, "evals": np.array([]), "dim": dim, "skipped": True}
+            result[Sz_int] = {"E0": None, "evals": np.array([]), "dim": dim,
+                              "skipped": True, "evecs_top": []}
             continue
         basis = [tuple(1 if i in up else 0 for i in range(N))
                  for up in combinations(range(N), Nup)]
@@ -308,11 +313,23 @@ def _ed_spectrum(D, J):
         H_mat = _sp.csr_matrix((di, (ri, ci)), shape=(dim, dim))
         k = min(6, dim)
         if dim <= 500:
-            ev = np.sort(np.linalg.eigvalsh(H_mat.toarray()))[:k]
+            ev_all, evec_all = np.linalg.eigh(H_mat.toarray())
+            ev    = ev_all[:k]
+            evecs = evec_all[:, :k]
         else:
-            ev, _ = _spla.eigsh(H_mat, k=k, which='SA')
-            ev = np.sort(ev)
-        result[Sz_int] = {"E0": float(ev[0]), "evals": ev, "dim": dim, "skipped": False}
+            ev_raw, evecs = _spla.eigsh(H_mat, k=k, which='SA')
+            order = np.argsort(ev_raw)
+            ev    = ev_raw[order]
+            evecs = evecs[:, order]
+        # Store top-_N_TOP components (by |coeff|) for each eigenvector
+        n_top = min(_N_TOP, dim)
+        evecs_top = []
+        for j in range(evecs.shape[1]):
+            col      = evecs[:, j]
+            top_idx  = np.argsort(-np.abs(col))[:n_top]
+            evecs_top.append([(float(col[ii]), basis[ii]) for ii in top_idx])
+        result[Sz_int] = {"E0": float(ev[0]), "evals": ev, "dim": dim,
+                          "skipped": False, "evecs_top": evecs_top}
     return result
 
 
@@ -604,6 +621,64 @@ with tab_sim:
                 f'</div>',
                 unsafe_allow_html=True,
             )
+
+    # ── Eigenvectors ──────────────────────────────────────────────
+    with st.expander("Ground-State Eigenvectors  |ψ₀⟩ per Sᵤ Sector", expanded=False):
+        st.markdown(
+            f'<p style="color:{T["txt_mute"]};font-size:0.84rem;margin:0 0 0.7rem;">'
+            f'Each column shows the dominant basis-state amplitudes of the ground-state '
+            f'eigenvector in that S<sub>z</sub> sector.  '
+            f'Spin states are written as |s<sub>0</sub>s<sub>1</sub>…s<sub>N-1</sub>⟩ '
+            f'with ↑ = spin-up (1) and ↓ = spin-down (0), site-index order matching '
+            f'the lattice rows left-to-right, top-to-bottom.  '
+            f'For large blocks only the 8 largest |amplitude| components are shown.</p>',
+            unsafe_allow_html=True,
+        )
+        _vec_cols = st.columns(min(len(_ev_sorted), 4))
+        for _ci, (Sz_int, _data) in enumerate(_ev_sorted):
+            _lbl = _sz_label(Sz_int)
+            _cc  = _CARD_COLORS[_ci % len(_CARD_COLORS)]
+            with _vec_cols[_ci % len(_vec_cols)]:
+                if _data["skipped"] or not _data["evecs_top"]:
+                    st.markdown(
+                        f'<div class="z-card" style="border-left:3px solid {_cc};">'
+                        f'<b>Sz = {_lbl}</b><br>'
+                        f'<small style="color:{T["txt_mute"]}"><em>skipped</em></small>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                    continue
+                _top = _data["evecs_top"][0]   # ground-state eigenvector
+                _shown = min(len(_top), 8)
+                _rows = ""
+                for _coeff, _state in _top[:_shown]:
+                    if abs(_coeff) < 5e-5:
+                        continue
+                    _spins = "".join("↑" if s else "↓" for s in _state)
+                    _sign  = "+" if _coeff >= 0 else "−"
+                    _rows += (
+                        f'<tr><td style="font-family:monospace;font-size:0.78rem;'
+                        f'color:{T["txt_main"]};padding-right:0.5rem;">'
+                        f'{_sign}{abs(_coeff):.4f}</td>'
+                        f'<td style="font-family:monospace;font-size:0.78rem;'
+                        f'color:{T["accent"]};">|{_spins}⟩</td></tr>'
+                    )
+                _more = _data["dim"] - _shown
+                _more_note = (
+                    f'<tr><td colspan="2" style="font-size:0.74rem;color:{T["txt_mute"]};">'
+                    f'… {_more:,} more components</td></tr>'
+                    if _more > 0 else ""
+                )
+                st.markdown(
+                    f'<div class="z-card" style="border-left:3px solid {_cc};padding-bottom:0.6rem;">'
+                    f'<b>Sz = {_lbl}</b>'
+                    f'<small style="color:{T["txt_mute"]}"> &nbsp;dim={_data["dim"]:,}'
+                    f'&nbsp; E₀/J={_data["E0"]/_heis_J:.4g}</small><br>'
+                    f'<table style="margin-top:0.4rem;border-collapse:collapse;">'
+                    f'{_rows}{_more_note}</table>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
 
     # ── Magnetisation plateau plot ─────────────────────────────────
     st.markdown(
