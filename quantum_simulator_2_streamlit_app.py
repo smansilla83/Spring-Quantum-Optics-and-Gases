@@ -288,6 +288,7 @@ def _ed_spectrum(D, J):
             s = r * D + c
             bonds.append((s, r * D + (c + 1) % D))
             bonds.append((s, ((r + 1) % D) * D + c))
+    _J0 = abs(J) < 1e-8    # flag: treat as non-interacting (all eigenvalues = 0)
     result = {}
     for Nup in range(math.ceil(N / 2), N + 1):
         Sz_int = 2 * Nup - N
@@ -299,28 +300,33 @@ def _ed_spectrum(D, J):
         basis = [tuple(1 if i in up else 0 for i in range(N))
                  for up in combinations(range(N), Nup)]
         idx_map = {s: i for i, s in enumerate(basis)}
-        ri, ci, di = [], [], []
-        for row_i, state in enumerate(basis):
-            for (a, b) in bonds:
-                sza = 0.5 if state[a] else -0.5
-                szb = 0.5 if state[b] else -0.5
-                ri.append(row_i); ci.append(row_i); di.append(J * sza * szb)
-                if state[a] != state[b]:
-                    lst = list(state); lst[a], lst[b] = lst[b], lst[a]
-                    ns = tuple(lst)
-                    if ns in idx_map:
-                        ri.append(row_i); ci.append(idx_map[ns]); di.append(J * 0.5)
-        H_mat = _sp.csr_matrix((di, (ri, ci)), shape=(dim, dim))
         k = min(6, dim)
-        if dim <= 500:
-            ev_all, evec_all = np.linalg.eigh(H_mat.toarray())
-            ev    = ev_all[:k]
-            evecs = evec_all[:, :k]
+        if _J0:
+            # J = 0: all basis states are degenerate eigenstates at E = 0
+            ev    = np.zeros(k)
+            evecs = np.eye(dim, k)
         else:
-            ev_raw, evecs = _spla.eigsh(H_mat, k=k, which='SA')
-            order = np.argsort(ev_raw)
-            ev    = ev_raw[order]
-            evecs = evecs[:, order]
+            ri, ci, di = [], [], []
+            for row_i, state in enumerate(basis):
+                for (a, b) in bonds:
+                    sza = 0.5 if state[a] else -0.5
+                    szb = 0.5 if state[b] else -0.5
+                    ri.append(row_i); ci.append(row_i); di.append(J * sza * szb)
+                    if state[a] != state[b]:
+                        lst = list(state); lst[a], lst[b] = lst[b], lst[a]
+                        ns = tuple(lst)
+                        if ns in idx_map:
+                            ri.append(row_i); ci.append(idx_map[ns]); di.append(J * 0.5)
+            H_mat = _sp.csr_matrix((di, (ri, ci)), shape=(dim, dim))
+            if dim <= 500:
+                ev_all, evec_all = np.linalg.eigh(H_mat.toarray())
+                ev    = ev_all[:k]
+                evecs = evec_all[:, :k]
+            else:
+                ev_raw, evecs = _spla.eigsh(H_mat, k=k, which='SA')
+                order = np.argsort(ev_raw)
+                ev    = ev_raw[order]
+                evecs = evecs[:, order]
         # Store top-_N_TOP components (by |coeff|) for each eigenvector
         n_top = min(_N_TOP, dim)
         evecs_top = []
@@ -544,9 +550,15 @@ with tab_sim:
 
     _hc1, _hc2 = st.columns(2)
     with _hc1:
-        _heis_J    = st.slider("Exchange coupling  J", 0.1, 3.0, 1.0, 0.05, key="heis_J")
+        _heis_J    = st.slider("Exchange coupling  J", 0.0, 3.0, 1.0, 0.05, key="heis_J")
     with _hc2:
         _heis_Hmax = st.slider("H / J  axis maximum", 1.0, 14.0, 8.0, 0.5,  key="heis_Hmax")
+    _heis_H_curr = st.slider(
+        "Current field  H / J",
+        0.0, float(_heis_Hmax), 0.0, 0.05,
+        key="heis_Hcurr",
+        help="Shown as a vertical marker on the magnetisation plot.",
+    )
 
     _n_bonds_h = 2 * _ed_N2
     _hilbert_h = 2 ** _ed_N2
@@ -719,6 +731,13 @@ with tab_sim:
     for _th in _trans_HJ:
         _fig_mag.add_vline(x=float(_th), line_dash="dot",
                            line_color=AMBER, line_width=1.3, opacity=0.75)
+    # current-H marker
+    if _heis_H_curr > 0:
+        _fig_mag.add_vline(x=float(_heis_H_curr), line_dash="solid",
+                           line_color=ROSE, line_width=2.0, opacity=0.9,
+                           annotation_text=f"H/J = {_heis_H_curr:.2f}",
+                           annotation_font_color=ROSE,
+                           annotation_position="top right")
 
     _annotated_sz = set()
     for _i, _sz in enumerate(_Sz_gs_arr):
@@ -776,6 +795,168 @@ with tab_sim:
         f'</div>',
         unsafe_allow_html=True,
     )
+
+    # ── Energy Eigenvalue Spectrum vs H/J ────────────────────────
+    st.markdown(
+        '<p class="sec-lbl" style="margin-top:2rem;">'
+        'Energy Eigenvalue Spectrum &mdash; E / J &nbsp;vs&nbsp; H / J</p>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<p style="color:{T["txt_mute"]};font-size:0.88rem;line-height:1.65;margin:0 0 0.8rem;">'
+        f'Each line is the energy of one eigenstate as a function of H/J. '
+        f'Within sector S<sub>z</sub>, eigenvalues shift linearly: '
+        f'E<sub>n</sub>(H)/J = E<sub>n</sub>/J &minus; (H/J)·S<sub>z</sub>. '
+        f'The bold curve traces the ground-state envelope. '
+        f'Slope of each line = &minus;S<sub>z</sub>; level crossings produce the '
+        f'<em>magnetisation plateaus</em> seen above. '
+        f'For N = 36 the S<sub>z</sub> = 0 sector (dim ≈ 9×10⁹) is beyond dense/sparse ED '
+        f'in the browser; only the high-S<sub>z</sub> sectors (S<sub>z</sub> ≥ N/2&minus;6) '
+        f'are shown.</p>',
+        unsafe_allow_html=True,
+    )
+
+    _es_lat_opts = {"2 × 2  (N = 4)": 2, "4 × 4  (N = 16)": 4, "6 × 6  (N = 36)": 6}
+    _es_lat_str  = st.radio("Lattice", list(_es_lat_opts), horizontal=True, key="es_lat")
+    _es_D        = _es_lat_opts[_es_lat_str]
+    _es_N        = _es_D ** 2
+
+    _esc1, _esc2, _esc3 = st.columns(3)
+    with _esc1:
+        _es_J = st.slider("J", 0.0, 3.0, 1.0, 0.05, key="es_J",
+                           help="J = 0: pure Zeeman (no exchange). J > 0: antiferromagnetic.")
+    with _esc2:
+        _es_HJ = st.slider("Selected H / J", 0.0, 10.0, 0.0, 0.1, key="es_HJ",
+                           help="Marks the chosen field on the plot and identifies the eigenstate.")
+    with _esc3:
+        _es_nlev = st.slider("Levels per sector", 1, 6, 3, 1, key="es_nlev")
+
+    with st.spinner(f"Solving {_es_D}×{_es_D} Heisenberg model (J = {_es_J:.2f})…"):
+        _es_spec = _ed_spectrum(_es_D, _es_J)
+
+    _J_norm = max(float(_es_J), 1e-6)   # safe divisor for E/J axis
+
+    # Build fan-diagram traces
+    _HJ_fan  = np.linspace(0.0, 10.0, 600)
+    _es_sorted = sorted(_es_spec.items())
+    _fan_colors = [SAGE, AMBER, BUTTER, STEEL, ROSE, MOSS, SLATE, TERRA, DARK_BRN]
+    _gs_env  = np.full(len(_HJ_fan), np.inf)   # ground-state envelope
+
+    _fig_es = go.Figure()
+    _shown_sectors = []
+    for _si, (Sz_int, _dat) in enumerate(_es_sorted):
+        if _dat["skipped"] or _dat["E0"] is None:
+            continue
+        _shown_sectors.append(Sz_int)
+        _Sz  = Sz_int / 2.0
+        _col = _fan_colors[_si % len(_fan_colors)]
+        _evals_use = _dat["evals"][:_es_nlev]
+        for _ni, _Ev in enumerate(_evals_use):
+            _EJ_line = _Ev / _J_norm - _HJ_fan * _Sz
+            _gs_env  = np.minimum(_gs_env, _EJ_line)
+            _fig_es.add_trace(go.Scatter(
+                x=_HJ_fan, y=_EJ_line,
+                mode="lines",
+                line=dict(color=_col, width=1.4 if _ni > 0 else 2.0,
+                          dash="dot" if _ni > 0 else "solid"),
+                name=f"Sz={_sz_label(Sz_int)}, n={_ni}" if _ni > 0 else f"Sz={_sz_label(Sz_int)}",
+                showlegend=(_ni == 0),
+                legendgroup=f"Sz{Sz_int}",
+                hovertemplate=f"Sz={_sz_label(Sz_int)}, n={_ni}<br>H/J=%{{x:.2f}}<br>E/J=%{{y:.4f}}<extra></extra>",
+            ))
+
+    # Ground-state envelope
+    if not np.all(np.isinf(_gs_env)):
+        _fig_es.add_trace(go.Scatter(
+            x=_HJ_fan, y=_gs_env,
+            mode="lines", line=dict(color=DARK_BRN if not dark_mode else OFF_WHT,
+                                     width=3.0, dash="solid"),
+            name="Ground state", showlegend=True,
+        ))
+
+    # Vertical line at selected H/J
+    _fig_es.add_vline(x=float(_es_HJ), line_dash="dash",
+                      line_color=ROSE, line_width=1.8, opacity=0.85,
+                      annotation_text=f"H/J = {_es_HJ:.2f}",
+                      annotation_font_color=ROSE,
+                      annotation_position="top right")
+
+    _fig_es.update_layout(
+        paper_bgcolor=T["page_bg"], plot_bgcolor=T["plot_bg"],
+        height=460, margin=dict(l=60, r=20, t=30, b=50),
+        xaxis=dict(title="H / J", range=[0, 10],
+                   tickfont=dict(color=T["txt_mute"], size=10),
+                   title_font=dict(color=T["txt_mute"]), gridcolor=T["border"]),
+        yaxis=dict(title="E / J" if _es_J > 1e-6 else "E  (J = 0, relative)",
+                   tickfont=dict(color=T["txt_mute"], size=10),
+                   title_font=dict(color=T["txt_mute"]), gridcolor=T["border"]),
+        legend=dict(bgcolor=T["card_bg"], bordercolor=T["border"],
+                    font=dict(color=T["txt_main"], size=9), tracegroupgap=1),
+        hoverlabel=dict(bgcolor=T["hover_bg"], font=dict(color=T["hover_txt"])),
+    )
+    st.plotly_chart(_fig_es, use_container_width=True)
+    st.markdown(
+        f'<div class="caption-box">'
+        f'Solid lines: ground state of each S<sub>z</sub> sector (n = 0). '
+        f'Dotted lines: excited states within the same sector. '
+        f'Bold black/white curve: overall ground-state envelope '
+        f'(minimum over all sectors at each H/J). '
+        f'Slope of each line = &minus;S<sub>z</sub>; intercept = E<sub>n</sub>(H=0)/J. '
+        f'{"N = 36: only S_z ≥ " + str(_es_N//2 - 6) + " sectors computed (low-S_z sectors too large); the Sz = 0 ground state at H = 0 requires QuSpin." if _es_N == 36 else ""}'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Eigenstate at selected (J, H) ─────────────────────────────
+    st.markdown('<p class="sec-lbl">Eigenstate at Selected (J, H / J)</p>',
+                unsafe_allow_html=True)
+    _H_sel  = float(_es_HJ) * float(_es_J)
+    _best_E_sel = np.inf
+    _best_Sz_sel = None
+    for _Sz_int_s, _dat_s in _es_spec.items():
+        if _dat_s["E0"] is None:
+            continue
+        _E_cand = _dat_s["E0"] - _H_sel * (_Sz_int_s / 2.0)
+        if _E_cand < _best_E_sel:
+            _best_E_sel  = _E_cand
+            _best_Sz_sel = _Sz_int_s
+
+    if _best_Sz_sel is not None:
+        _gs_dat  = _es_spec[_best_Sz_sel]
+        _EJ_val  = _best_E_sel / _J_norm
+        _top     = _gs_dat["evecs_top"][0] if _gs_dat["evecs_top"] else []
+        _shown   = min(len(_top), 8)
+        _rows_es = ""
+        for _coeff_e, _state_e in _top[:_shown]:
+            if abs(_coeff_e) < 5e-5:
+                continue
+            _spins_e = "".join("↑" if s else "↓" for s in _state_e)
+            _sign_e  = "+" if _coeff_e >= 0 else "−"
+            _rows_es += (
+                f'<tr>'
+                f'<td style="font-family:monospace;font-size:0.80rem;'
+                f'color:{T["txt_main"]};padding-right:0.6rem;white-space:nowrap;">'
+                f'{_sign_e}&thinsp;{abs(_coeff_e):.4f}</td>'
+                f'<td style="font-family:monospace;font-size:0.80rem;'
+                f'color:{T["accent"]};white-space:nowrap;">|{_spins_e}⟩</td>'
+                f'</tr>'
+            )
+        _more_es = _gs_dat["dim"] - _shown
+        _more_note_es = (
+            f'<tr><td colspan="2" style="font-size:0.74rem;color:{T["txt_mute"]};">'
+            f'… {_more_es:,} more terms</td></tr>'
+        ) if _more_es > 0 else ""
+        _j0_note = " (J = 0: all basis states degenerate; canonical representative shown)" if _es_J < 1e-6 else ""
+        st.markdown(
+            f'<div class="caption-box">'
+            f'<b>J = {_es_J:.3g},&ensp;H/J = {_es_HJ:.3g},&ensp;'
+            f'S<sub>z</sub> = {_sz_label(_best_Sz_sel)},&ensp;'
+            f'E/J = {_EJ_val:.5g},&ensp;dim = {_gs_dat["dim"]:,}</b>'
+            f'{_j0_note}<br><br>'
+            f'<table style="border-collapse:collapse;">{_rows_es}{_more_note_es}</table>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     # ── Computation notes ─────────────────────────────────────────
     with st.expander("Computation: Sᵣ Subspace Blocking & Sparse ED", expanded=False):
