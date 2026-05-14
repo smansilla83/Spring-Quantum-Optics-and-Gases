@@ -262,38 +262,6 @@ def badge_html(v, size=30):
             f'width:{size}px;height:{size}px;border-radius:50%;background:{BADGE_BG[v]};'
             f'color:{BADGE_FG[v]};font-size:0.80rem;font-weight:700;">{BADGE_SYM[v]}</span>')
 
-# ── Zeeman helpers (4-site Heisenberg ring) ────────────────────
-_Z_BONDS = [(i, (i + 1) % 4) for i in range(4)]
-_sz0_basis = [tuple(1 if i in up else 0 for i in range(4))
-              for up in combinations(range(4), 2)]
-_sz1_basis = [tuple(1 if i in up else 0 for i in range(4))
-              for up in combinations(range(4), 3)]
-_szm1_basis = [tuple(1 if i in up else 0 for i in range(4))
-               for up in combinations(range(4), 1)]
-_sz2_basis  = [(1, 1, 1, 1)]
-
-def build_heisenberg(J, basis):
-    n = len(basis)
-    H = np.zeros((n, n))
-    idx_map = {s: i for i, s in enumerate(basis)}
-    for row, state in enumerate(basis):
-        for (a, b) in _Z_BONDS:
-            sz_a = 0.5 if state[a] else -0.5
-            sz_b = 0.5 if state[b] else -0.5
-            H[row, row] += J * sz_a * sz_b
-            if state[a] != state[b]:
-                lst = list(state)
-                lst[a], lst[b] = lst[b], lst[a]
-                ns = tuple(lst)
-                if ns in idx_map:
-                    H[row, idx_map[ns]] += J * 0.5
-    return H
-
-_H_unit = build_heisenberg(1.0, _sz0_basis)
-
-def _spin_label(state):
-    return "|" + "".join("↑" if s else "↓" for s in state) + "⟩"
-
 # ── Numerical ED (cached, square lattice PBC) ─────────────────
 @st.cache_data(show_spinner=False)
 def _ed_spectrum(D, J):
@@ -340,12 +308,8 @@ def _sz_label(Sz_int):
     if Sz_int % 2 == 0: return f"+{Sz_int // 2}"
     return f"+{Sz_int}/2"
 
-def _sz_neg_label(Sz_int):
-    if Sz_int % 2 == 0: return f"-{Sz_int // 2}"
-    return f"-{Sz_int}/2"
-
 # ── Tabs ───────────────────────────────────────────────────────
-tab_sim, tab_zeeman = st.tabs(["Hubbard Simulator", "Zeeman Analysis"])
+tab_sim, tab_bec = st.tabs(["Hubbard Simulator", "4 · Numerical Validation — BEC Mixture"])
 
 # ══════════════════════════════════════════════════════════════
 # TAB 1 — Hubbard Simulator
@@ -574,757 +538,346 @@ with tab_sim:
                     unsafe_allow_html=True,
                 )
 
-        # ── Energy vs H/J plot ─────────────────────────────────
-        _HJ = np.linspace(0.0, 10.0, 600)
-        fig_ed = go.Figure()
-        _all_lines = []
-        _ic = 0
-        for Sz_int, evals in _ev_sorted:
-            E0J = float(evals[0]) / _ed_J
-            _col = _CARD_COLORS[_ic % len(_CARD_COLORS)]
-            _lbl_p = _sz_label(Sz_int)
-            Sz = Sz_int / 2.0
-            _line_p = E0J - _HJ * Sz
-            fig_ed.add_trace(go.Scatter(
-                x=_HJ, y=_line_p, mode="lines",
-                name=f"Sz = {_lbl_p}",
-                line=dict(color=_col, width=1.8),
-            ))
-            _all_lines.append(_line_p)
-            if Sz_int > 0:
-                _lbl_n = _sz_neg_label(Sz_int)
-                _line_n = E0J + _HJ * Sz
-                fig_ed.add_trace(go.Scatter(
-                    x=_HJ, y=_line_n, mode="lines",
-                    name=f"Sz = {_lbl_n}",
-                    line=dict(color=_col, width=1.2, dash="dash"),
-                ))
-                _all_lines.append(_line_n)
-            _ic += 1
-
-        _gs_line = np.min(np.array(_all_lines), axis=0)
-        fig_ed.add_trace(go.Scatter(
-            x=_HJ, y=_gs_line, mode="lines",
-            name="Ground state",
-            line=dict(color=OFF_WHT if dark_mode else DARK_BRN, width=3),
-        ))
-        fig_ed.update_layout(
-            paper_bgcolor=T["page_bg"], plot_bgcolor=T["plot_bg"],
-            height=440, margin=dict(l=60, r=20, t=30, b=50),
-            xaxis=dict(
-                title="H / J", range=[0, 10],
-                tickfont=dict(color=T["txt_mute"], size=10),
-                title_font=dict(color=T["txt_mute"]),
-            ),
-            yaxis=dict(
-                title="E / J",
-                tickfont=dict(color=T["txt_mute"], size=10),
-                title_font=dict(color=T["txt_mute"]),
-            ),
-            legend=dict(
-                bgcolor=T["card_bg"], bordercolor=T["border"],
-                font=dict(color=T["txt_main"], size=10),
-                tracegroupgap=2,
-            ),
-            hoverlabel=dict(bgcolor=T["hover_bg"], font=dict(color=T["hover_txt"])),
-        )
-        st.plotly_chart(fig_ed, use_container_width=True)
-        st.markdown(
-            f'<div class="caption-box">'
-            f'Solid lines: S<sub>z</sub> &ge; 0 sectors '
-            f'(energy decreases or stays flat with H). '
-            f'Dashed lines: S<sub>z</sub> &lt; 0 mirror '
-            f'via time-reversal symmetry — E(&minus;S<sub>z</sub>) = E(+S<sub>z</sub>) '
-            f'at H = 0. '
-            f'Heavy curve: overall ground state. '
-            f'Eigenvalues from NumPy LAPACK (block dim &le; 500) '
-            f'or SciPy Lanczos sparse solver (larger blocks).'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
 
 # ══════════════════════════════════════════════════════════════
-# TAB 2 — Zeeman Analysis
+# TAB 2 — BEC Mixture Calculator
 # ══════════════════════════════════════════════════════════════
-with tab_zeeman:
+with tab_bec:
+    import scipy.constants as _sc
+    from scipy.optimize import fsolve as _fsolve
+    import matplotlib.pyplot as _plt
+    import matplotlib.patches as _mp
 
-    st.markdown(f"""
+    # ── Physics solver ────────────────────────────────────────────
+    @st.cache_data(show_spinner=False)
+    def _solve_tf(mB_amu, mF_amu, fB_Hz, fF_Hz, NB, NF, aB_nm, aF_nm, aBF_nm, n_pts=400):
+        """
+        Thomas-Fermi solver for a two-component BEC mixture in a 3-D spherical trap.
+
+        Assumptions
+        -----------
+        * Thomas-Fermi approximation (kinetic energy << interaction energy; valid when N·a/a_ho >> 1).
+        * Spherically symmetric harmonic traps (ω_x = ω_y = ω_z = ω_i).
+        * Zero temperature, ground state only.
+        * Both components are weakly interacting bosons (mean-field GPE).
+        * Local density approximation: interspecies coupling is treated pointwise.
+
+        Coupling constants (SI)
+        -----------------------
+          g_BB = 4π ℏ² a_B  / m_B
+          g_FF = 4π ℏ² a_F  / m_F
+          g_BF = 2π ℏ² a_BF (1/m_B + 1/m_F)
+
+        Miscibility condition: g_BF² < g_BB · g_FF
+
+        Chemical potentials μ_B, μ_F are found by enforcing ∫4πr² n_i dr = N_i.
+        """
+        hbar = _sc.hbar;  kB = _sc.k;  amu = _sc.u
+        mB  = mB_amu * amu;  mF  = mF_amu * amu
+        wB  = 2*np.pi*fB_Hz; wF  = 2*np.pi*fF_Hz
+        aB  = aB_nm * 1e-9;  aF  = aF_nm * 1e-9;  aBF = aBF_nm * 1e-9
+
+        gBB = 4*np.pi*hbar**2 * aB  / mB
+        gFF = 4*np.pi*hbar**2 * aF  / mF
+        gBF = 2*np.pi*hbar**2 * aBF * (1/mB + 1/mF)
+
+        a_ho_B = np.sqrt(hbar / (mB*wB))
+        a_ho_F = np.sqrt(hbar / (mF*wF))
+
+        # Initial μ guess from single-species TF result
+        mu_B0 = hbar*wB/2 * max((15*NB*abs(aB)/a_ho_B)**(2/5), 0.1)
+        mu_F0 = hbar*wF/2 * max((15*NF*abs(aF)/a_ho_F)**(2/5), 0.1)
+        r_max = max(np.sqrt(2*mu_B0/(mB*wB**2)), np.sqrt(2*mu_F0/(mF*wF**2))) * 1.8
+        r = np.linspace(0, r_max, n_pts)
+
+        def _local(ri, muB, muF):
+            VB = 0.5*mB*wB**2*ri**2;  VF = 0.5*mF*wF**2*ri**2
+            D  = gBB*gFF - gBF**2
+            if abs(D) < 1e-55:
+                return max(0., (muB-VB)/gBB), max(0., (muF-VF)/gFF)
+            nB = (gFF*(muB-VB) - gBF*(muF-VF)) / D
+            nF = (gBB*(muF-VF) - gBF*(muB-VB)) / D
+            if nB < 0 and nF < 0:  return 0., 0.
+            if nB < 0:             return 0., max(0., (muF-VF)/gFF)
+            if nF < 0:             return max(0., (muB-VB)/gBB), 0.
+            return nB, nF
+
+        def _profiles(muB, muF):
+            nb, nf = np.zeros(n_pts), np.zeros(n_pts)
+            for i, ri in enumerate(r):
+                nb[i], nf[i] = _local(ri, muB, muF)
+            return nb, nf
+
+        def _res(mus):
+            nb, nf = _profiles(mus[0], mus[1])
+            return [(4*np.pi*np.trapz(nb*r**2, r) - NB)/NB,
+                    (4*np.pi*np.trapz(nf*r**2, r) - NF)/NF]
+
+        try:
+            sol, _, flag, _ = _fsolve(_res, [mu_B0, mu_F0], full_output=True)[:4]
+            muB, muF = sol if flag == 1 else (mu_B0, mu_F0)
+        except Exception:
+            muB, muF = mu_B0, mu_F0
+
+        nb, nf = _profiles(muB, muF)
+
+        def _rtf(n_arr):
+            m = n_arr > n_arr.max()*1e-4
+            return float(r[m][-1])*1e6 if m.any() else 0.
+
+        miscible = bool(gBF**2 < gBB*gFF)
+        return dict(
+            r_um   = r*1e6,
+            nB     = nb*1e-6,   # cm⁻³
+            nF     = nf*1e-6,
+            R_B    = _rtf(nb),  # µm
+            R_F    = _rtf(nf),
+            n0_B   = float(nb[0])*1e-6,
+            n0_F   = float(nf[0])*1e-6,
+            muB_nK = muB/(_sc.k*1e-9),
+            muF_nK = muF/(_sc.k*1e-9),
+            gBF    = gBF, gBB=gBB, gFF=gFF,
+            miscible = miscible,
+            regime   = "Miscible" if miscible else "Phase-separated",
+            a_ho_B_um = float(np.sqrt(_sc.hbar/(mB_amu*_sc.u * 2*np.pi*fB_Hz)))*1e6,
+        )
+
+    # ── Header ────────────────────────────────────────────────────
+    st.markdown("""
 <div class="hero">
-  <h1 style="font-size:1.6rem;">Zeeman Analysis — 4-Site Heisenberg Ring</h1>
+  <h1 style="font-size:1.6rem;">4 · Numerical Validation — BEC Mixture Density Profiles</h1>
   <p>
-    Spin-½ Heisenberg ring on <em>N = 4</em> sites with antiferromagnetic exchange <em>J &gt; 0</em>
-    and external field <em>H</em>.
-    Total Hamiltonian:
-    <em>Ĥ = J Σ<sub>i</sub> Ŝ<sub>i</sub>·Ŝ<sub>i+1</sub> − H Σ<sub>i</sub> Ŝ<sup>z</sup><sub>i</sub></em>
-    (periodic boundary conditions).
+    Two-component Bose-Einstein condensate in a 3-D spherical harmonic trap.
+    Solve the coupled Thomas-Fermi equations to obtain density profiles n<sub>B</sub>(r),
+    n<sub>F</sub>(r) and compare the non-interacting, weak-interacting, and phase-separation
+    regimes for negative, zero, and positive interspecies scattering length a<sub>BF</sub>.
   </p>
 </div>
 """, unsafe_allow_html=True)
 
-    # ── Section 0: Sz = 0 Subspace ─────────────────────────────
-    st.markdown('<p class="sec-lbl">1 · S<sub>z</sub> = 0 Subspace</p>',
-                unsafe_allow_html=True)
-
-    _N4 = 4
-    _dim_sz0_4 = math.comb(2 * _N4, _N4)   # C(8,4) = 70, but for spin-only: C(4,2)=6
-
-    st.markdown(f"""
-<div class="caption-box" style="margin-bottom:1rem;">
-  Restrict to states where the total spin projection
-  <b>S<sub>z</sub> = &frac12;(N<sub>&uarr;</sub> &minus; N<sub>&darr;</sub>) = 0</b>,
-  i.e. equal numbers of spin-up and spin-down electrons.<br><br>
-  For the <b>4-site spin-½ Heisenberg ring</b> each site carries one spin-½.
-  Each site is either <b>&uarr;</b> or <b>&darr;</b>, so with
-  N<sub>&uarr;</sub> = N<sub>&darr;</sub> = 2 we must count how many ways
-  to assign spin-up to exactly 2 of the 4 sites.<br><br>
-  The 4 lattice sites are <b>distinguishable</b> — each has a unique label (0, 1, 2, 3)
-  and a fixed position in space. We are choosing <em>which</em> 2 of those
-  distinguishable sites carry spin-up, so the count is given by the
-  <b>binomial coefficient</b>:
-</div>
-""", unsafe_allow_html=True)
-
-    st.markdown(r"""
-$$
-D \;=\; C(4,\,2) \;=\; \binom{4}{2} \;=\; \frac{4!}{2!\,(4-2)!} \;=\; \frac{4\times 3}{2\times 1} \;=\; 6
-$$
-""")
-
-    st.markdown(f"""
-<div class="caption-box" style="margin-top:0.4rem;margin-bottom:1rem;">
-  <b>Distinguishable or indistinguishable?</b><br>
-  The <em>sites</em> are <b>distinguishable</b> (they are fixed, labelled lattice
-  positions), so C(4, 2) correctly counts the 6 distinct spin configurations.<br>
-  The <em>electrons</em> themselves are <b>indistinguishable</b> fermions — swapping
-  two electrons produces the same physical state (up to a sign from antisymmetry).
-  In the spin-sector we absorb that antisymmetry into the choice of site labels:
-  once we specify <em>which sites</em> are spin-up, the state is fully determined
-  without any double-counting. Hence the binomial coefficient, not a multinomial or
-  permutation, gives the correct dimension D = 6.<br><br>
-  These 6 states span the block of the Hamiltonian that is <em>completely unaffected
-  by the external field H</em> — as proved in the next section.
-</div>
-""", unsafe_allow_html=True)
-
-    with st.expander("All 6 basis states of the Sz = 0 sector (N = 4 sites)", expanded=True):
-        # Build a small visual grid of the 6 states using badge-style circles
-        _z_labels = [_spin_label(s) for s in _sz0_basis]
-        _z_sz_str  = {(1,): "↑  (Sz = +½)", (0,): "↓  (Sz = −½)"}
-
-        # Display as an HTML table: one row per state, one column per site
-        _site_cols = "".join(
-            f'<th style="padding:6px 18px;color:{T["txt_mute"]};font-size:0.78rem;'
-            f'font-weight:600;text-align:center;">Site {i}</th>'
-            for i in range(4)
-        )
-        _state_rows = ""
-        for si, state in enumerate(_sz0_basis):
-            _cells = ""
-            for spin in state:
-                _bg  = SAGE  if spin else ROSE
-                _sym = "↑"   if spin else "↓"
-                _fg  = OFF_WHT
-                _cells += (
-                    f'<td style="padding:8px 18px;text-align:center;">'
-                    f'<span style="display:inline-flex;align-items:center;justify-content:center;'
-                    f'width:32px;height:32px;border-radius:50%;background:{_bg};'
-                    f'color:{_fg};font-size:0.95rem;font-weight:700;">{_sym}</span>'
-                    f'</td>'
-                )
-            _ket = _z_labels[si]
-            _state_rows += (
-                f'<tr style="border-bottom:1px solid {T["border"]};">'
-                f'<td style="padding:8px 14px;color:{T["txt_mute"]};font-size:0.80rem;'
-                f'text-align:center;font-family:monospace;">#{si}</td>'
-                f'{_cells}'
-                f'<td style="padding:8px 14px;color:{T["txt_main"]};font-size:0.85rem;'
-                f'text-align:center;font-family:Georgia;">{_ket}</td>'
-                f'<td style="padding:8px 14px;color:{T["txt_mute"]};font-size:0.78rem;'
-                f'text-align:center;">Sz = 0</td>'
-                f'</tr>'
-            )
-
-        _tbl = f"""
-<div style="border-radius:10px;overflow:hidden;border:1px solid {T['border']};">
-<table style="width:100%;border-collapse:collapse;background:{T['card_bg']};">
-  <thead>
-    <tr style="background:{T['card_bg']};border-bottom:2px solid {T['border']};">
-      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.78rem;font-weight:600;text-align:center;">#</th>
-      {_site_cols}
-      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.78rem;font-weight:600;text-align:center;">Ket</th>
-      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.78rem;font-weight:600;text-align:center;">Sz total</th>
-    </tr>
-  </thead>
-  <tbody>{_state_rows}</tbody>
-</table>
-</div>
-"""
-        st.markdown(_tbl, unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="caption-box" style="margin-top:0.6rem;">'
-            f'States #1 and #4 (<b>|↑↓↑↓⟩</b> and <b>|↓↑↓↑⟩</b>) are the two '
-            f'<b>Néel states</b> — every bond is antiparallel. They give the '
-            f'diagonal entry −J in the Hamiltonian matrix (Section 3). '
-            f'The remaining four are "domain-wall" states with two parallel and two '
-            f'antiparallel bonds, giving diagonal 0.'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Section 1: Zeeman proof ─────────────────────────────────
-    st.markdown('<p class="sec-lbl">2 · Zeeman Term &nbsp; H Σ Ŝ<sup>z</sup><sub>i</sub> |φ⟩ = 0</p>',
-                unsafe_allow_html=True)
-
-    with st.expander("Proof — the external field does not shift or split the Sz = 0 sector",
-                     expanded=True):
+    # ── Assumptions expander ──────────────────────────────────────
+    with st.expander("Model & Assumptions", expanded=False):
         st.markdown(r"""
-The Zeeman term couples the total spin projection to the external field $H$:
+**Thomas-Fermi (TF) approximation** — kinetic energy is neglected; valid when
+$N\,a/a_{ho} \gg 1$.  The Gross-Pitaevskii energy functional reduces to local algebraic
+equations for the densities.
+
+**Coupled TF equations** (spherical trap, 3-D):
 
 $$
-\hat{H}_Z = H \sum_{i=0}^{3} \hat{S}^z_i = H\,\hat{S}^z_{\mathrm{total}},
+n_B(r) = \frac{g_{FF}\bigl(\mu_B - V_B(r)\bigr) - g_{BF}\bigl(\mu_F - V_F(r)\bigr)}{g_{BB}g_{FF} - g_{BF}^2},
 \qquad
-\hat{S}^z_{\mathrm{total}} = \frac{1}{2}(\hat{N}_{\uparrow} - \hat{N}_{\downarrow}).
+n_F(r) = \frac{g_{BB}\bigl(\mu_F - V_F(r)\bigr) - g_{BF}\bigl(\mu_B - V_B(r)\bigr)}{g_{BB}g_{FF} - g_{BF}^2}
 $$
 
-**Claim.** For any state $|\varphi\rangle$ in the $S_z = 0$ sector, $\hat{H}_Z|\varphi\rangle = 0$.
+with $V_i(r)=\tfrac{1}{2}m_i\omega_i^2 r^2$.  Densities are clamped to zero where negative
+(phase-separated boundary approximation).
+
+**Coupling constants (SI):**
+$\;g_{BB}=4\pi\hbar^2 a_B/m_B,\quad g_{FF}=4\pi\hbar^2 a_F/m_F,\quad
+g_{BF}=2\pi\hbar^2 a_{BF}(m_B^{-1}+m_F^{-1}).$
+
+**Miscibility condition:** $g_{BF}^2 < g_{BB}\,g_{FF}$. Violation → phase separation.
+
+**Chemical potentials** $\mu_B,\,\mu_F$ are found numerically by enforcing
+$4\pi\int_0^\infty n_i(r)\,r^2\,dr = N_i$.
+        """)
+
+    # ── Parameter inputs ──────────────────────────────────────────
+    st.markdown('<p class="sec-lbl">Parameters</p>', unsafe_allow_html=True)
+    _c1, _c2, _c3 = st.columns(3)
+    with _c1:
+        st.markdown("**Species B** (e.g. ⁸⁷Rb)")
+        _mB  = st.number_input("m_B (amu)",          1.0,  300.0, 87.0,  1.0,  key="bec_mB")
+        _fB  = st.number_input("ω_B / 2π  (Hz)",     1.0, 2000.0, 100.0, 10.0, key="bec_fB")
+        _NB  = st.number_input("N_B  (atoms)",        100, 500000, 50000, 1000, key="bec_NB")
+        _aB  = st.number_input("a_B (nm)",            0.01, 50.0,  5.29,  0.1,  key="bec_aB",
+                                help="⁸⁷Rb: a_B ≈ 5.29 nm (100 a₀)")
+    with _c2:
+        st.markdown("**Species F** (e.g. ⁴¹K)")
+        _mF  = st.number_input("m_F (amu)",          1.0,  300.0, 41.0,  1.0,  key="bec_mF")
+        _fF  = st.number_input("ω_F / 2π  (Hz)",     1.0, 2000.0, 150.0, 10.0, key="bec_fF")
+        _NF  = st.number_input("N_F  (atoms)",        100, 500000, 30000, 1000, key="bec_NF")
+        _aF  = st.number_input("a_F (nm)",            0.01, 50.0,  3.39,  0.1,  key="bec_aF",
+                                help="⁴¹K: a_F ≈ 3.39 nm (64 a₀)")
+    with _c3:
+        st.markdown("**Interspecies a_BF values**")
+        _aBF_neg  = st.number_input("a_BF  attractive (nm)", -300.0, -0.01, -5.0,  0.5, key="bec_n")
+        _aBF_weak = st.number_input("a_BF  weak repulsive (nm)", 0.01, 50.0,  5.0,  0.5, key="bec_w")
+        _aBF_sep  = st.number_input("a_BF  phase-sep (nm)",      1.0, 500.0, 50.0, 5.0, key="bec_s")
+        st.caption("a_BF = 0 (non-interacting) is always included.")
+        _scan_lo = st.number_input("Scan min (nm)", -100.0,  0.0, -30.0, 1.0, key="bec_slo")
+        _scan_hi = st.number_input("Scan max (nm)",   0.0, 300.0,  60.0, 1.0, key="bec_shi")
+        _n_scan  = st.slider("Scan points", 5, 40, 20, key="bec_nscan")
+
+    # ── Solve four cases ──────────────────────────────────────────
+    _case_labels = [
+        "Non-interacting\n(a_BF = 0)",
+        f"Attractive\n(a_BF = {_aBF_neg:.1f} nm)",
+        f"Weak repulsive\n(a_BF = {_aBF_weak:.1f} nm)",
+        f"Phase separation\n(a_BF = {_aBF_sep:.1f} nm)",
+    ]
+    _case_aBF = [0.0, float(_aBF_neg), float(_aBF_weak), float(_aBF_sep)]
+
+    with st.spinner("Solving Thomas-Fermi equations…"):
+        _results = {
+            lbl: _solve_tf(_mB, _mF, _fB, _fF, _NB, _NF, _aB, _aF, abf)
+            for lbl, abf in zip(_case_labels, _case_aBF)
+        }
+
+    # ── Coupling constants display ────────────────────────────────
+    st.markdown('<p class="sec-lbl">Coupling Constants  g = 4πℏ²a/m</p>',
+                unsafe_allow_html=True)
+    _ref0 = _results[_case_labels[0]]
+    _gBB_SI, _gFF_SI = _ref0["gBB"], _ref0["gFF"]
+    _misc_g = float(np.sqrt(_gBB_SI * _gFF_SI))
+
+    def _g_fmt(g):
+        if g == 0:
+            return "0 J·m³"
+        exp = int(np.floor(np.log10(abs(g))))
+        mantissa = g / 10**exp
+        return f"{mantissa:.3f}&thinsp;&times;&thinsp;10<sup>{exp}</sup> J·m³"
+
+    _gbf_rows = "".join(
+        f'<li><b>{lbl.replace(chr(10), " ")}</b>: '
+        f'g<sub>BF</sub> = {_g_fmt(_results[lbl]["gBF"])} '
+        f'&rarr; <em>{"miscible" if _results[lbl]["miscible"] else "phase-separated"}</em></li>'
+        for lbl in _case_labels
+    )
+    st.markdown(
+        f'<div class="caption-box">'
+        f'<b>g<sub>BB</sub></b> = {_g_fmt(_gBB_SI)} &nbsp;&nbsp;'
+        f'<b>g<sub>FF</sub></b> = {_g_fmt(_gFF_SI)}<br>'
+        f'Miscibility threshold &nbsp;√(g<sub>BB</sub>&thinsp;g<sub>FF</sub>) = {_g_fmt(_misc_g)}'
+        f'<ul style="margin:0.5rem 0 0;padding-left:1.4rem;">{_gbf_rows}</ul>'
+        f'<small style="color:{T["txt_mute"]}">g<sub>BB</sub>=4πℏ²a<sub>B</sub>/m<sub>B</sub>, '
+        f'g<sub>FF</sub>=4πℏ²a<sub>F</sub>/m<sub>F</sub>, '
+        f'g<sub>BF</sub>=2πℏ²a<sub>BF</sub>(m<sub>B</sub><sup>-1</sup>+m<sub>F</sub><sup>-1</sup>). '
+        f'Phase separation when g<sub>BF</sub>² &gt; g<sub>BB</sub>g<sub>FF</sub>.</small>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Plot 1: density profiles ──────────────────────────────────
+    st.markdown('<p class="sec-lbl">Density Profiles</p>', unsafe_allow_html=True)
+
+    _fig1, _axes = _plt.subplots(1, 4, figsize=(16, 4))
+    _fig1.patch.set_facecolor("none")
+    for _ax, (_lbl, _res) in zip(_axes, _results.items()):
+        _ax.plot(_res["r_um"], _res["nB"], color=SAGE,  lw=2.0, label="Species B")
+        _ax.plot(_res["r_um"], _res["nF"], color=ROSE,  lw=2.0, label="Species F", ls="--")
+        _ax.set_facecolor("none")
+        _ax.set_xlabel("r  (μm)", fontsize=8)
+        _ax.set_ylabel("n  (cm⁻³)", fontsize=8)
+        _ax.tick_params(labelsize=7)
+        for _sp in _ax.spines.values(): _sp.set_color(OFF_WHT)
+        _ax.tick_params(colors=DARK_BRN)
+        _ax.set_xlabel("r  (μm)", fontsize=8, color=DARK_BRN)
+        _ax.set_ylabel("n  (cm⁻³)", fontsize=8, color=DARK_BRN)
+        _title = _lbl.replace("\n", "  ") + f"\n[{_res['regime']}]"
+        _ax.set_title(_title, fontsize=7.5, color=DARK_BRN, pad=4)
+        _ax.legend(fontsize=6.5, facecolor=OFF_WHT, edgecolor=OFF_WHT, labelcolor=DARK_BRN)
+        for _R, _col in [(_res["R_B"], SAGE), (_res["R_F"], ROSE)]:
+            if _R > 0:
+                _ax.axvline(_R, color=_col, lw=0.8, ls=":", alpha=0.7)
+    _fig1.tight_layout()
+    st.pyplot(_fig1, use_container_width=True)
+    _plt.close(_fig1)
+    st.caption(
+        f"Fixed parameters — B ({_mB} amu, ω_B/2π = {_fB} Hz, N_B = {int(_NB)}, "
+        f"a_B = {_aB} nm); F ({_mF} amu, ω_F/2π = {_fF} Hz, N_F = {int(_NF)}, a_F = {_aF} nm). "
+        "Dotted vertical lines: Thomas-Fermi radii R_TF for each species. "
+        "Assumption: 3-D spherical trap, zero temperature, Thomas-Fermi approximation (N·a/a_ho ≫ 1)."
+    )
+
+    # ── Plot 2: scan over a_BF ────────────────────────────────────
+    st.markdown('<p class="sec-lbl">TF Radius & Peak Density vs a_BF</p>',
+                unsafe_allow_html=True)
+    _aBF_arr = np.linspace(_scan_lo, _scan_hi, int(_n_scan))
+    with st.spinner("Running a_BF scan…"):
+        _scan = [_solve_tf(_mB, _mF, _fB, _fF, _NB, _NF, _aB, _aF, float(_a), n_pts=250)
+                 for _a in _aBF_arr]
+
+    _fig2, (_ax_r, _ax_n) = _plt.subplots(1, 2, figsize=(12, 4))
+    _fig2.patch.set_facecolor("none")
+    for _axx in (_ax_r, _ax_n):
+        _axx.set_facecolor("none")
+        _axx.tick_params(colors=DARK_BRN, labelsize=8)
+        for _sp in _axx.spines.values(): _sp.set_color(OFF_WHT)
+        _axx.axvline(0, color=OFF_WHT, lw=0.8, ls="--")
+
+    _ax_r.plot(_aBF_arr, [s["R_B"] for s in _scan], color=SAGE, lw=2, label="R_TF  (B)")
+    _ax_r.plot(_aBF_arr, [s["R_F"] for s in _scan], color=ROSE, lw=2, ls="--", label="R_TF  (F)")
+    _ax_r.set_xlabel("a_BF  (nm)", color=DARK_BRN)
+    _ax_r.set_ylabel("Thomas-Fermi radius  (μm)", color=DARK_BRN)
+    _ax_r.set_title("TF Radii vs a_BF", color=DARK_BRN)
+    _ax_r.legend(facecolor=OFF_WHT, edgecolor=OFF_WHT, labelcolor=DARK_BRN, fontsize=8)
+
+    _ax_n.plot(_aBF_arr, [s["n0_B"] for s in _scan], color=SAGE, lw=2, label="n₀  (B)")
+    _ax_n.plot(_aBF_arr, [s["n0_F"] for s in _scan], color=ROSE, lw=2, ls="--", label="n₀  (F)")
+    _ax_n.set_xlabel("a_BF  (nm)", color=DARK_BRN)
+    _ax_n.set_ylabel("Peak density  (cm⁻³)", color=DARK_BRN)
+    _ax_n.set_title("Peak Density vs a_BF", color=DARK_BRN)
+    _ax_n.legend(facecolor=OFF_WHT, edgecolor=OFF_WHT, labelcolor=DARK_BRN, fontsize=8)
+
+    _fig2.tight_layout()
+    st.pyplot(_fig2, use_container_width=True)
+    _plt.close(_fig2)
+    st.caption(
+        f"Scan over a_BF ∈ [{_scan_lo:.0f}, {_scan_hi:.0f}] nm with all other parameters fixed "
+        f"(same as density-profile plots above). "
+        "Left: as a_BF → negative (attractive, g_BF < 0) both R_TF shrink and peak densities rise — "
+        "mutual attraction compresses the clouds; beyond a critical |a_BF| the mixture collapses. "
+        "As a_BF → positive (repulsive, g_BF > 0) R_TF expand and peak densities fall; "
+        "once g_BF² > g_BB·g_FF the clouds demix (phase separation) and the profiles split "
+        "into core/shell geometry — evident as a kink or plateau in the curves."
+    )
+
+    # ── Summary table ─────────────────────────────────────────────
+    st.markdown('<p class="sec-lbl">Summary Table</p>', unsafe_allow_html=True)
+    _tbl = []
+    for _lbl, _res in _results.items():
+        _abf_v = _case_aBF[_case_labels.index(_lbl)]
+        _tbl.append({
+            "Case":           _lbl.replace("\n", " "),
+            "a_BF (nm)":      f"{_abf_v:.1f}",
+            "Regime":         _res["regime"],
+            "R_TF B (μm)":   f"{_res['R_B']:.2f}",
+            "R_TF F (μm)":   f"{_res['R_F']:.2f}",
+            "n₀_B (cm⁻³)":   f"{_res['n0_B']:.3e}",
+            "n₀_F (cm⁻³)":   f"{_res['n0_F']:.3e}",
+            "μ_B (nK)":      f"{_res['muB_nK']:.1f}",
+            "μ_F (nK)":      f"{_res['muF_nK']:.1f}",
+        })
+    st.dataframe(pd.DataFrame(_tbl), use_container_width=True, hide_index=True)
+
+    # ── Physics commentary ────────────────────────────────────────
+    with st.expander("Physics Commentary", expanded=True):
+        st.markdown(f"""
+**Chosen parameters** — Species B: $^{{87}}$Rb ({_mB} amu, $\\omega_B/2\\pi={_fB}$ Hz,
+$N_B={_NB}$, $a_B={_aB}$ nm); Species F: $^{{41}}$K ({_mF} amu, $\\omega_F/2\\pi={_fF}$ Hz,
+$N_F={_NF}$, $a_F={_aF}$ nm). Harmonic oscillator length
+$a_{{ho}}^B \\approx {_results[_case_labels[0]]['a_ho_B_um']:.3f}\\,\\mu$m.
 
 ---
 
-**Proof.**
+**Non-interacting ($a_{{BF}}=0$):** Each species forms an independent inverted-parabola profile.
+The TF radius is $R_{{TF}}^i = a_{{ho}}^i\\,(15 N_i a_i/a_{{ho}}^i)^{{1/5}}$ and the peak density
+$n_0^i = \\mu_i / g_{{ii}}$ depends only on intraspecies interactions.
 
-*Step 1 — every basis state is an eigenstate of $\hat{S}^z_{\mathrm{total}}$ with eigenvalue 0.*
+**Attractive ($a_{{BF}}<0$, $g_{{BF}}<0$):** Interspecies attraction pulls the clouds together,
+increasing spatial overlap.  The effective chemical potential rises for both species, *compressing*
+each cloud.  $R_{{TF}}$ **decreases** and $n_0$ **increases** as $|a_{{BF}}|$ grows.
+Beyond a critical attraction the mixture becomes mechanically unstable (mean-field collapse).
 
-The $S_z = 0$ sector contains all configurations with exactly $k = 2$ spin-up and $k = 2$
-spin-down electrons ($N_\uparrow = N_\downarrow = 2$). For any such basis state $|b\rangle$:
+**Weak repulsion ($a_{{BF}}>0$, small):** Mutual repulsion swells each cloud outward.
+$R_{{TF}}$ **increases** and $n_0$ **decreases** moderately relative to the non-interacting case.
 
-$$
-\hat{S}^z_{\mathrm{total}}\,|b\rangle
-= \tfrac{1}{2}(N_{\uparrow} - N_{\downarrow})\,|b\rangle
-= \tfrac{1}{2}(2 - 2)\,|b\rangle = 0.
-$$
-
-*Step 2 — linearity extends the result to the whole sector.*
-
-Any $|\varphi\rangle \in \mathcal{H}_{S_z=0}$ is a superposition $|\varphi\rangle = \sum_b c_b\,|b\rangle$,
-so by linearity:
-
-$$
-\hat{H}_Z\,|\varphi\rangle
-= H \sum_b c_b\;\hat{S}^z_{\mathrm{total}}\,|b\rangle
-= H \sum_b c_b \cdot 0 = 0. \qquad \blacksquare
-$$
-
-**Physical consequence.** The field $H$ **neither shifts** the energies of $S_z = 0$ eigenstates
-**nor mixes** them with other sectors — the subspace is an *invariant eigenspace* of $\hat{H}_Z$
-with eigenvalue $0$. In contrast, the $S_z = \pm1$ and $S_z = \pm2$ sectors receive Zeeman
-shifts $\mp H$ and $\mp 2H$ respectively (Section 4).
-""")
-
-    # ── Section 2: 6×6 Hamiltonian ─────────────────────────────
-    st.markdown('<p class="sec-lbl">3 · Hamiltonian Construction — 6 × 6 matrix for Sz = 0</p>',
-                unsafe_allow_html=True)
-
-    with st.expander("6 × 6 Hamiltonian H/J in the Sz = 0 basis", expanded=True):
-        st.markdown(r"""
-With $N = 4$ sites and half-filling, the $S_z = 0$ sector has $D = \binom{4}{2} = 6$ basis states.
-
-The Heisenberg exchange $J\bigl[\tfrac{1}{2}(\hat{S}^+_i\hat{S}^-_j + \hat{S}^-_i\hat{S}^+_j) + \hat{S}^z_i\hat{S}^z_j\bigr]$ gives diagonal $\pm J/4$ per bond and off-diagonal $J/2$ when swapping antiparallel neighbours. Because $\hat{H}_Z = 0$ on this sector, the full Hamiltonian is:
-
-$$
-\hat{H}\big|_{S_z=0} = J \cdot \mathbf{M}, \qquad
-\mathbf{M} = \begin{pmatrix}
- 0 & \tfrac{1}{2} & 0 & 0 & \tfrac{1}{2} & 0 \\
-\tfrac{1}{2} & -1 & \tfrac{1}{2} & \tfrac{1}{2} & 0 & \tfrac{1}{2} \\
- 0 & \tfrac{1}{2} & 0 & 0 & \tfrac{1}{2} & 0 \\
- 0 & \tfrac{1}{2} & 0 & 0 & \tfrac{1}{2} & 0 \\
-\tfrac{1}{2} & 0 & \tfrac{1}{2} & \tfrac{1}{2} & -1 & \tfrac{1}{2} \\
- 0 & \tfrac{1}{2} & 0 & 0 & \tfrac{1}{2} & 0
-\end{pmatrix}
-$$
-
-The two **Néel states** $|\!\uparrow\downarrow\uparrow\downarrow\rangle$ and
-$|\!\downarrow\uparrow\downarrow\uparrow\rangle$ (rows 1 and 4) have all bonds antiparallel
-giving diagonal $-J$. The four "domain-wall" states have equal parallel and antiparallel bonds
-giving diagonal $0$.
-""")
-        z_labels = [_spin_label(s) for s in _sz0_basis]
-        fig_mat = go.Figure(go.Heatmap(
-            z=_H_unit,
-            x=z_labels, y=z_labels,
-            colorscale=[[0, ROSE], [0.5, "#FAF7F2"], [1, SAGE]],
-            zmid=0,
-            text=[[f"{v:.2g}" for v in row] for row in _H_unit],
-            texttemplate="%{text}",
-            showscale=True,
-            colorbar=dict(title="H/J", tickfont=dict(color=T["txt_mute"], size=10)),
-        ))
-        fig_mat.update_layout(
-            paper_bgcolor=T["page_bg"], plot_bgcolor=T["plot_bg"],
-            height=340, margin=dict(l=10, r=10, t=30, b=10),
-            xaxis=dict(tickfont=dict(color=T["txt_main"], size=12)),
-            yaxis=dict(tickfont=dict(color=T["txt_main"], size=12), autorange="reversed"),
-        )
-        st.plotly_chart(fig_mat, use_container_width=True)
-
-    # ── Section 3: Eigenenergies ────────────────────────────────
-    st.markdown('<p class="sec-lbl">4 · Eigenenergies and Sector Dimensions</p>',
-                unsafe_allow_html=True)
-
-    with st.expander("Spectrum of all Sz sectors at H = 0", expanded=True):
-        st.markdown(r"""
-Because $[\hat{H}_J,\,\hat{S}^z_{\mathrm{total}}] = 0$, the exchange Hamiltonian is
-block-diagonal in $S_z$. Diagonalising each block independently:
-
-| Sector $S_z$ | Dimension | Eigenvalues of $\hat{H}/J$ at $H = 0$ |
-|:---:|:---:|:---|
-| $+2$ | 1 | $+1$ |
-| $+1$ | 4 | $-1,\ 0,\ 0,\ +1$ |
-| $\;0$ | 6 | $-2,\ -1,\ 0,\ 0,\ 0,\ +1$ |
-| $-1$ | 4 | $-1,\ 0,\ 0,\ +1$ |
-| $-2$ | 1 | $+1$ |
-
-The global ground state at $H = 0$ is the **singlet** in $S_z = 0$ with $E_0 = -2J$.
-This is lower than the classical Néel energy $E_{\rm Néel} = -J$:
-quantum fluctuations lower the energy by a factor of 2.
-""")
-        # Round away floating-point noise (values < 1e-10 are numerically zero)
-        def _clean(arr):
-            return np.where(np.abs(arr) < 1e-10, 0.0, np.round(arr, 10))
-
-        evals_0 = _clean(np.sort(np.linalg.eigvalsh(build_heisenberg(1.0, _sz0_basis))))
-        evals_1 = _clean(np.sort(np.linalg.eigvalsh(build_heisenberg(1.0, _sz1_basis))))
-        E2_0    = float(build_heisenberg(1.0, _sz2_basis)[0, 0])
-
-        def _fmt_ev(arr):
-            return ",&ensp;".join(f'<span style="color:{T["txt_main"]};">{v:.4g}</span>' for v in arr)
-
-        c0, c1, c2 = st.columns(3)
-        with c0:
-            st.markdown(
-                f'<div class="z-card">'
-                f'<b>Sz = 0</b>&nbsp;<small style="color:{T["txt_mute"]}">D = 6</small><br>'
-                f'<small style="color:{T["txt_mute"]}">eigenvalues E/J:</small><br>'
-                f'{_fmt_ev(evals_0)}'
-                f'</div>', unsafe_allow_html=True)
-        with c1:
-            st.markdown(
-                f'<div class="z-card">'
-                f'<b>Sz = ±1</b>&nbsp;<small style="color:{T["txt_mute"]}">D = 4</small><br>'
-                f'<small style="color:{T["txt_mute"]}">eigenvalues E/J:</small><br>'
-                f'{_fmt_ev(evals_1)}'
-                f'</div>', unsafe_allow_html=True)
-        with c2:
-            st.markdown(
-                f'<div class="z-card">'
-                f'<b>Sz = ±2</b>&nbsp;<small style="color:{T["txt_mute"]}">D = 1</small><br>'
-                f'<small style="color:{T["txt_mute"]}">eigenvalues E/J:</small><br>'
-                f'<span style="color:{T["txt_main"]};">{E2_0:.4g}</span>'
-                f'</div>', unsafe_allow_html=True)
-
-        st.markdown(r"""
----
-**In which sector would you expect to find the ground state?**
-
-Comparing the lowest eigenvalue in each sector:
-
-| Sector $S_z$ | Lowest $E/J$ at $H = 0$ |
-|:---:|:---:|
-| $0$ | $-2$ |
-| $\pm 1$ | $-1$ |
-| $\pm 2$ | $+1$ |
-
-The $S_z = 0$ sector has the globally lowest minimum ($-2J$), so at zero field the ground
-state must lie there. This is physically expected: antiferromagnetic exchange ($J > 0$) favours
-opposite spins on neighbouring sites, which minimises energy when the total spin projection is
-zero. States with $|S_z| > 0$ require some net alignment, which costs exchange energy and
-therefore have higher minima. As the field $H$ increases, the sectors with $S_z > 0$ gain a
-Zeeman energy $-H S_z$ that eventually makes them competitive — this is the origin of the
-magnetisation staircase discussed in Section 6.
-""")
-
-    # ── Section 4: Energy levels vs H ──────────────────────────
-    st.markdown('<p class="sec-lbl">5 · Eigenenergies and Limiting Regimes</p>',
-                unsafe_allow_html=True)
-
-    with st.expander("Limiting cases H = 0 and J = 0", expanded=True):
-        st.markdown(r"""
-**Case 1 — $H = 0$ (pure Heisenberg).**
-Every $S_z$ projection of a given $S_{\rm total}$ multiplet is degenerate.
-Ground state: the **singlet** ($S_{\rm total} = 0$, $S_z = 0$), $E_0 = -2J$.
-This is below the classical Néel state ($E_{\rm Néel} = -J$) — quantum fluctuations lower the energy.
-""")
-
-        # ── Ground-state wavefunction (H=0) ──────────────────────
-        st.markdown(r"""
-**Exact ground-state wavefunction at $H = 0$**
-
-Diagonalising the $6\times6$ block in the $S_z=0$ sector yields the unique
-lowest eigenvalue $E_0 = -2J$ (non-degenerate singlet) with eigenvector:
-
-$$
-|\psi_0\rangle
-= \frac{1}{2\sqrt{3}}
-\Bigl[
-  \bigl(
-    |\!\uparrow\uparrow\downarrow\downarrow\rangle
-  + |\!\uparrow\downarrow\downarrow\uparrow\rangle
-  + |\!\downarrow\uparrow\uparrow\downarrow\rangle
-  + |\!\downarrow\downarrow\uparrow\uparrow\rangle
-  \bigr)
-  - 2\bigl(
-    |\!\uparrow\downarrow\uparrow\downarrow\rangle
-  + |\!\downarrow\uparrow\downarrow\uparrow\rangle
-  \bigr)
-\Bigr]
-$$
-
-The four **domain-wall states** each carry amplitude $+\tfrac{1}{2\sqrt{3}}\approx+0.289$;
-the two **Néel states** $|\!\uparrow\downarrow\uparrow\downarrow\rangle$ and
-$|\!\downarrow\uparrow\downarrow\uparrow\rangle$ carry $-\tfrac{1}{\sqrt{3}}\approx-0.577$.
-Antiferromagnetic exchange prefers bond-alternating order, so the Néel states
-enter with twice the weight and opposite sign; quantum fluctuations then mix in
-the domain-wall configurations, lowering the energy below the classical Néel value
-$E_{\rm Néel}=-J$.
-
-""")
-        _wf_evals2, _wf_evecs2 = np.linalg.eigh(_H_unit)
-        _gs_v2 = _wf_evecs2[:, 0].copy()
-        if _gs_v2[1] > 0:
-            _gs_v2 = -_gs_v2
-        _wf_lbls = [_spin_label(s) for s in _sz0_basis]
-        _wf_rows = ""
-        for _lbl, _c in zip(_wf_lbls, _gs_v2):
-            _col = "#C4907E" if _c < -1e-10 else "#7D8B5A"
-            _wf_rows += (
-                f'<tr style="border-bottom:1px solid {T["border"]};">'
-                f'<td style="padding:7px 16px;font-family:Georgia;color:{T["txt_main"]};'
-                f'text-align:center;">{_lbl}</td>'
-                f'<td style="padding:7px 16px;text-align:center;font-weight:600;'
-                f'color:{_col};font-family:monospace;">{_c:+.6f}</td>'
-                f'</tr>'
-            )
-        st.markdown(f"""
-<div style="border-radius:10px;overflow:hidden;border:1px solid {T['border']};margin-top:0.6rem;margin-bottom:0.5rem;">
-<table style="width:100%;border-collapse:collapse;background:{T['card_bg']};">
-  <thead>
-    <tr style="background:{T['card_bg']};border-bottom:2px solid {T['border']};">
-      <th style="padding:8px 16px;color:{T['txt_mute']};font-size:0.80rem;font-weight:600;text-align:center;">Basis state |b⟩</th>
-      <th style="padding:8px 16px;color:{T['txt_mute']};font-size:0.80rem;font-weight:600;text-align:center;">Coefficient ⟨b|ψ₀⟩</th>
-    </tr>
-  </thead>
-  <tbody style="font-size:0.92rem;">{_wf_rows}</tbody>
-</table>
-</div>
-""", unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="caption-box">'
-            f'Normalization: &Sigma;|c|&sup2;&nbsp;=&nbsp;{float(np.dot(_gs_v2, _gs_v2)):.6f}. &ensp;'
-            f'Domain-wall states <span style="color:#7D8B5A;font-weight:600;">(green)</span>'
-            f'&nbsp;c&nbsp;=&nbsp;1/(2&radic;3)&nbsp;&asymp;&nbsp;+{1/(2*np.sqrt(3)):.4f};&ensp;'
-            f'N&eacute;el states <span style="color:#C4907E;font-weight:600;">(red)</span>'
-            f'&nbsp;c&nbsp;=&nbsp;&minus;1/&radic;3&nbsp;&asymp;&nbsp;{-1/np.sqrt(3):.4f}.'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-        st.markdown("---")
-        st.markdown(r"""
-**Case 2 — $J = 0$ (pure Zeeman).**
-Without exchange the field alone governs the ground state via $\hat{H} = -H\hat{S}^z_{\rm total}$.
-The energy of a fully polarised state is $E = -H \cdot S_z^{\rm total}$, so the sign of $H$ selects which direction is favoured:
-
-- $H > 0$: $|\!\uparrow\uparrow\uparrow\uparrow\rangle$ ($S_z = +2$) is lowest, $E = -2H < 0$.
-- $H < 0$: $|\!\downarrow\downarrow\downarrow\downarrow\rangle$ ($S_z = -2$) is lowest, $E = +2H < 0$ (since $H < 0$).
-
-The all-down state is equally valid as a ground state — the field simply points the other way.
-In both cases there is no staircase: without exchange the system jumps straight to full polarisation.
-""")
-
-    with st.expander("General case H, J > 0 — energy levels vs field", expanded=True):
-        st.markdown(r"""
-The Zeeman term adds $-H \cdot S_z^{\rm total}$ uniformly to each sector:
-$$E_n(S_z, H) = E_n^{(J)} - H\,S_z^{\rm total}.$$
-The $S_z = 0$ levels are **field-independent** (horizontal). The $S_z = +1$ block shifts
-down by $H$; $S_z = +2$ shifts down by $2H$.
-""")
-        col_j1, col_h1 = st.columns(2)
-        with col_j1:
-            J_val = st.slider("Exchange coupling J", 0.1, 3.0, 1.0, 0.05, key="J_diag")
-        with col_h1:
-            H_max = st.slider("Max field H", 0.5, 6.0, 3.0, 0.1, key="H_diag")
-
-        H_arr = np.linspace(0, H_max, 400)
-        ev0 = np.sort(np.linalg.eigvalsh(build_heisenberg(J_val, _sz0_basis)))
-        ev1 = np.sort(np.linalg.eigvalsh(build_heisenberg(J_val, _sz1_basis)))
-        evm1 = np.sort(np.linalg.eigvalsh(build_heisenberg(J_val, _szm1_basis)))
-        E2J  = float(build_heisenberg(J_val, _sz2_basis)[0, 0])
-
-        fig_e = go.Figure()
-        for i, E in enumerate(ev0):
-            fig_e.add_trace(go.Scatter(
-                x=H_arr, y=np.full_like(H_arr, E), mode="lines",
-                line=dict(color=SAGE, width=1.8),
-                name="Sz = 0", legendgroup="sz0", showlegend=(i == 0),
-            ))
-        for i, E in enumerate(ev1):
-            fig_e.add_trace(go.Scatter(
-                x=H_arr, y=E - H_arr, mode="lines",
-                line=dict(color=AMBER, width=1.8),
-                name="Sz = +1", legendgroup="sz1", showlegend=(i == 0),
-            ))
-        fig_e.add_trace(go.Scatter(
-            x=H_arr, y=E2J - 2 * H_arr, mode="lines",
-            line=dict(color=SLATE, width=2.2, dash="dot"), name="Sz = +2",
-        ))
-        for i, E in enumerate(evm1):
-            fig_e.add_trace(go.Scatter(
-                x=H_arr, y=E + H_arr, mode="lines",
-                line=dict(color=ROSE, width=1.2, dash="dash"),
-                name="Sz = −1", legendgroup="szm1", showlegend=(i == 0),
-            ))
-        fig_e.add_trace(go.Scatter(
-            x=H_arr, y=E2J + 2 * H_arr, mode="lines",
-            line=dict(color=DARK_BRN, width=1.2, dash="dash"), name="Sz = −2",
-        ))
-        fig_e.update_layout(
-            paper_bgcolor=T["page_bg"], plot_bgcolor=T["plot_bg"],
-            height=420, margin=dict(l=55, r=20, t=30, b=45),
-            xaxis=dict(title="Field H", tickfont=dict(color=T["txt_mute"], size=10),
-                       title_font=dict(color=T["txt_mute"])),
-            yaxis=dict(title="Energy E", tickfont=dict(color=T["txt_mute"], size=10),
-                       title_font=dict(color=T["txt_mute"])),
-            legend=dict(bgcolor=T["card_bg"], bordercolor=T["border"],
-                        font=dict(color=T["txt_main"], size=11)),
-            hoverlabel=dict(bgcolor=T["hover_bg"], font=dict(color=T["hover_txt"])),
-        )
-        st.plotly_chart(fig_e, use_container_width=True)
-
-    # ── Section 5: Magnetization staircase ─────────────────────
-    st.markdown('<p class="sec-lbl">6 · Magnetization Staircase and Critical Fields H<sub>c</sub></p>',
-                unsafe_allow_html=True)
-
-    with st.expander("Ground-state Sz vs H — the staircase", expanded=True):
-        st.markdown(r"""
-**Derivation of the critical fields:**
-
-- $E_{\min}(S_z=0) = -2J$ (field-independent)
-- $E_{\min}(S_z=+1,\,H) = -J - H$
-- $E(S_z=+2,\,H) = J - 2H$
-
-$$
-H_{c1}:\ -J - H_{c1} = -2J \;\Rightarrow\; \boxed{H_{c1} = J}
-\qquad
-H_{c2}:\ J - 2H_{c2} = -J - H_{c2} \;\Rightarrow\; \boxed{H_{c2} = 2J}
-$$
-
-| Field range | Ground sector | $\langle S_z^{\rm total}\rangle$ |
-|:---:|:---:|:---:|
-| $0 \le H < J$ | $S_z = 0$ | $0$ |
-| $J \le H < 2J$ | $S_z = +1$ | $+1$ |
-| $H \ge 2J$ | $S_z = +2$ (full saturation) | $+2$ |
-""")
-        col_j2, _ = st.columns([1, 2])
-        with col_j2:
-            J2 = st.slider("Exchange coupling J", 0.1, 3.0, 1.0, 0.05, key="J_stair")
-
-        Hc1 = J2
-        Hc2 = 2 * J2
-        H_plot = np.linspace(0, 3 * J2 + 0.2, 800)
-
-        ev0_2 = np.sort(np.linalg.eigvalsh(build_heisenberg(J2, _sz0_basis)))
-        ev1_2 = np.sort(np.linalg.eigvalsh(build_heisenberg(J2, _sz1_basis)))
-        E2_2  = float(build_heisenberg(J2, _sz2_basis)[0, 0])
-
-        gs_e  = np.minimum(
-            np.minimum(ev0_2[0] * np.ones_like(H_plot), ev1_2[0] - H_plot),
-            E2_2 - 2 * H_plot,
-        )
-        sz_gs = np.where(
-            np.isclose(gs_e, ev0_2[0]), 0,
-            np.where(np.isclose(gs_e, ev1_2[0] - H_plot), 1, 2),
-        )
-
-        fig_s = go.Figure()
-        for sz_v, x0, x1, col in [
-            (0, 0,    Hc1,           "#D8EFD8"),
-            (1, Hc1,  Hc2,           "#FFF0D0"),
-            (2, Hc2,  3*J2 + 0.2,   "#D0E4F0"),
-        ]:
-            fig_s.add_vrect(x0=x0, x1=x1, fillcolor=col, opacity=0.25,
-                            layer="below", line_width=0)
-            fig_s.add_annotation(
-                x=(x0 + min(x1, 3*J2+0.2)) / 2, y=2.35,
-                text=f"Sz = {sz_v}", showarrow=False,
-                font=dict(color=T["txt_mute"], size=11),
-            )
-        for xc, lbl in [(Hc1, "H<sub>c1</sub> = J"), (Hc2, "H<sub>c2</sub> = 2J")]:
-            fig_s.add_vline(x=xc, line_dash="dot", line_color=T["txt_mute"], line_width=1.4)
-            fig_s.add_annotation(x=xc, y=-0.3, text=lbl, showarrow=False,
-                                 font=dict(color=T["txt_mute"], size=10), xanchor="center")
-        fig_s.add_trace(go.Scatter(
-            x=H_plot, y=sz_gs.astype(float),
-            mode="lines", line=dict(color=SAGE, width=3),
-            name="⟨Sz⟩ ground state",
-        ))
-        fig_s.update_layout(
-            paper_bgcolor=T["page_bg"], plot_bgcolor=T["plot_bg"],
-            height=360, margin=dict(l=55, r=20, t=30, b=55),
-            xaxis=dict(title="External field H", tickfont=dict(color=T["txt_mute"], size=10),
-                       title_font=dict(color=T["txt_mute"])),
-            yaxis=dict(title="⟨Sz⟩ total", tickvals=[0, 1, 2],
-                       tickfont=dict(color=T["txt_mute"], size=11),
-                       title_font=dict(color=T["txt_mute"]), range=[-0.45, 2.65]),
-            hoverlabel=dict(bgcolor=T["hover_bg"], font=dict(color=T["hover_txt"])),
-            legend=dict(bgcolor=T["card_bg"], bordercolor=T["border"],
-                        font=dict(color=T["txt_main"], size=11)),
-        )
-        st.plotly_chart(fig_s, use_container_width=True)
-        st.markdown(
-            f'<div class="caption-box">'
-            f'For J = {J2:.2f}: &nbsp;'
-            f'<b>H<sub>c1</sub> = {Hc1:.2f}</b> (Sz: 0 → 1)&nbsp;|&nbsp;'
-            f'<b>H<sub>c2</sub> = {Hc2:.2f}</b> (Sz: 1 → 2, full saturation). '
-            f'The Sz = 0 energies are flat because Ĥ<sub>Z</sub>|φ⟩ = 0 on that sector.'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-    # ── Section 6: Numerical ED ─────────────────────────────────
-    st.markdown('<p class="sec-lbl">7 · Numerical Scaling — 4×4 and 6×6 ED Validation (N = 2×2, PBC)</p>',
-                unsafe_allow_html=True)
-
-    with st.expander("Exact Diagonalization of all Sz sectors — N = 4 sites", expanded=True):
-        st.markdown(r"""
-**Method.** ED for spin-½ models on a square lattice with PBC reduces to three steps:
-
-1. **Enumerate the basis** — for each $S_z$ sector list all $\binom{N}{N_\uparrow}$ spin configurations.
-2. **Build $\hat{H}$** — for every bond $(i,j)$ add the diagonal Ising term $J\hat{S}^z_i\hat{S}^z_j$ and
-   the off-diagonal flip term $\tfrac{J}{2}(\hat{S}^+_i\hat{S}^-_j + \hat{S}^-_i\hat{S}^+_j)$ whenever
-   sites $i$ and $j$ carry opposite spins.
-3. **Diagonalise** — call `numpy.linalg.eigh` (dense LAPACK routine, equivalent to what QuSpin /
-   NetKet use internally for small blocks).
-
-For $N = 2\times2 = 4$ sites with PBC the five $S_z$ sectors have dimensions
-$\mathbf{1\cdot 4\cdot 6\cdot 4\cdot 1 = 16} = 2^4$, the full Hilbert-space dimension.
-The two largest blocks are the **4×4** ($S_z=\pm1$) and **6×6** ($S_z=0$) matrices
-already constructed in Sections 2–3.
-""")
-
-        # Sector definitions: (label, basis, analytical eigenvalues/J)
-        _szm2_basis_ed = [(0, 0, 0, 0)]
-        _ed_sectors = [
-            ("+2", _sz2_basis,       [1.],              1),
-            ("+1", _sz1_basis,       [-1., 0., 0., 1.], 4),
-            (" 0", _sz0_basis,       [-2.,-1.,0.,0.,0.,1.], 6),
-            ("−1", _szm1_basis,      [-1., 0., 0., 1.], 4),
-            ("−2", _szm2_basis_ed,   [1.],              1),
-        ]
-
-        _ed_rows = ""
-        for _sz_lbl, _ed_basis, _ana_ev, _dim in _ed_sectors:
-            _H_ed  = build_heisenberg(1.0, _ed_basis)
-            _num_ev = np.sort(np.linalg.eigvalsh(_H_ed))
-            _num_ev = np.where(np.abs(_num_ev) < 1e-10, 0.0, np.round(_num_ev, 8))
-            _err    = max(abs(float(n) - float(a)) for n, a in zip(_num_ev, _ana_ev))
-            _ok     = _err < 1e-7
-            _ana_s  = ",&ensp;".join(f"{v:g}" for v in _ana_ev)
-            _num_s  = ",&ensp;".join(f"{v:g}" for v in _num_ev)
-            _tick   = f'<span style="color:#7D8B5A;font-weight:700;">✓</span>' if _ok else \
-                      f'<span style="color:#C4907E;font-weight:700;">✗</span>'
-            _dim_badge = f'<b style="color:{T["accent"]};">{_dim}</b>'
-            _ed_rows += (
-                f'<tr style="border-bottom:1px solid {T["border"]};">'
-                f'<td style="padding:9px 16px;text-align:center;font-weight:600;'
-                f'color:{T["txt_main"]};">S<sub>z</sub>&nbsp;=&nbsp;{_sz_lbl}</td>'
-                f'<td style="padding:9px 16px;text-align:center;">{_dim_badge}</td>'
-                f'<td style="padding:9px 16px;font-family:monospace;color:{T["txt_main"]};'
-                f'font-size:0.88rem;">{_ana_s}</td>'
-                f'<td style="padding:9px 16px;font-family:monospace;color:{T["txt_main"]};'
-                f'font-size:0.88rem;">{_num_s}</td>'
-                f'<td style="padding:9px 16px;text-align:center;font-size:1.1rem;">{_tick}</td>'
-                f'</tr>'
-            )
-
-        st.markdown(f"""
-<div style="border-radius:10px;overflow:hidden;border:1px solid {T['border']};margin:0.8rem 0 0.4rem;">
-<table style="width:100%;border-collapse:collapse;background:{T['card_bg']};">
-  <thead>
-    <tr style="background:{T['card_bg']};border-bottom:2px solid {T['border']};">
-      <th style="padding:9px 16px;color:{T['txt_mute']};font-size:0.80rem;font-weight:600;text-align:center;">Sector</th>
-      <th style="padding:9px 16px;color:{T['txt_mute']};font-size:0.80rem;font-weight:600;text-align:center;">Block dim</th>
-      <th style="padding:9px 16px;color:{T['txt_mute']};font-size:0.80rem;font-weight:600;">Analytical E/J</th>
-      <th style="padding:9px 16px;color:{T['txt_mute']};font-size:0.80rem;font-weight:600;">Numerical E/J</th>
-      <th style="padding:9px 16px;color:{T['txt_mute']};font-size:0.80rem;font-weight:600;text-align:center;">Match</th>
-    </tr>
-  </thead>
-  <tbody style="font-size:0.90rem;">{_ed_rows}</tbody>
-</table>
-</div>
-""", unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="caption-box">'
-            f'All five sectors validated. Total dimension: 1+4+6+4+1 = <b>16</b> = 2<sup>4</sup>. &ensp;'
-            f'Numerical eigenvalues agree with the analytical spectrum to machine precision '
-            f'(|error| &lt; 10<sup>&minus;10</sup> in all entries). &ensp;'
-            f'Energies scale linearly with J; all results shown at J&nbsp;=&nbsp;1.'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-    with st.expander("Hilbert-space scaling — from 4 sites to beyond ED", expanded=False):
-        st.markdown(r"""
-The $S_z=0$ block dimension grows as $\binom{N}{N/2}$, which is **exponential** in $N$.
-Dense LAPACK ($\mathcal{O}(D^3)$) works up to $N\approx20$; beyond that one switches to
-sparse Krylov (Lanczos) methods, and eventually to DMRG or quantum Monte Carlo.
-""")
-        _sc_rows = ""
-        _sc_data = [
-            ( 4, "dense — LAPACK",         "#7D8B5A"),
-            ( 8, "dense — LAPACK",         "#7D8B5A"),
-            (12, "dense — LAPACK",         "#7D8B5A"),
-            (16, "sparse — Lanczos",       "#C9983A"),
-            (20, "sparse — Lanczos",       "#C9983A"),
-            (24, "sparse — RAM-limited",   "#C4907E"),
-            (36, "beyond ED",              "#C4907E"),
-        ]
-        for _Ns, _method, _col in _sc_data:
-            _df  = 2 ** _Ns
-            _ds0 = math.comb(_Ns, _Ns // 2)
-            _sc_rows += (
-                f'<tr style="border-bottom:1px solid {T["border"]};">'
-                f'<td style="padding:7px 14px;text-align:center;color:{T["txt_main"]};">{_Ns}</td>'
-                f'<td style="padding:7px 14px;text-align:right;color:{T["txt_mute"]};'
-                f'font-family:monospace;">{_df:,}</td>'
-                f'<td style="padding:7px 14px;text-align:right;color:{T["txt_mute"]};'
-                f'font-family:monospace;">{_ds0:,}</td>'
-                f'<td style="padding:7px 14px;color:{_col};font-size:0.86rem;">{_method}</td>'
-                f'</tr>'
-            )
-        st.markdown(f"""
-<div style="border-radius:10px;overflow:hidden;border:1px solid {T['border']};margin-top:0.6rem;">
-<table style="width:100%;border-collapse:collapse;background:{T['card_bg']};">
-  <thead>
-    <tr style="background:{T['card_bg']};border-bottom:2px solid {T['border']};">
-      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.79rem;font-weight:600;text-align:center;">N (sites)</th>
-      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.79rem;font-weight:600;text-align:right;">2<sup>N</sup> full dim</th>
-      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.79rem;font-weight:600;text-align:right;">S<sub>z</sub>=0 block</th>
-      <th style="padding:8px 14px;color:{T['txt_mute']};font-size:0.79rem;font-weight:600;">Method</th>
-    </tr>
-  </thead>
-  <tbody style="font-size:0.88rem;">{_sc_rows}</tbody>
-</table>
-</div>
-""", unsafe_allow_html=True)
-        st.markdown(
-            f'<div class="caption-box">'
-            f'<span style="color:#7D8B5A;font-weight:600;">Green</span> — feasible on a laptop '
-            f'with dense LAPACK (this app). &ensp;'
-            f'<span style="color:#C9983A;font-weight:600;">Amber</span> — sparse Krylov methods '
-            f'(QuSpin, NetKet). &ensp;'
-            f'<span style="color:#C4907E;font-weight:600;">Red</span> — beyond conventional ED; '
-            f'use DMRG, tensor networks, or quantum Monte Carlo.'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
-
-# ══════════════════════════════════════════════════════════════
+**Phase separation ($g_{{BF}}^2 > g_{{BB}}g_{{FF}}$, large positive $a_{{BF}}$):**
+The miscibility condition is violated.  The species demix: one occupies the core, the other
+a surrounding shell.  The species with the smaller TF radius (tighter confinement or fewer atoms)
+is typically squeezed to the centre.  The peak density of the *expelled* species at $r=0$ drops
+toward zero, while the *core* species density there rises.  The TF radius of the core species
+*shrinks* and that of the shell species *expands*.
+        """)
