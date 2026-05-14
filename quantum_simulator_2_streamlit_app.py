@@ -502,34 +502,6 @@ with tab_sim:
         unsafe_allow_html=True,
     )
 
-    # ── Limiting regimes ──────────────────────────────────────────
-    with st.expander("Eigenenergies in Limiting Regimes", expanded=True):
-        st.markdown(r"""
-**Hamiltonian:**
-$$\hat{H} = J\!\sum_{\langle i,j\rangle}\hat{\mathbf{S}}_i\cdot\hat{\mathbf{S}}_j
-           - H\!\sum_i \hat{S}_i^z$$
-
-#### Case A — $J = 0$ (no exchange coupling)
-| Field | Ground state | Energy |
-|-------|-------------|--------|
-| $H = 0$ | All $2^N$ states **degenerate** | $E = 0$ |
-| $H > 0$ | Fully polarised $\lvert{\uparrow\cdots\uparrow}\rangle$, $S_z^{tot}=N/2$ | $E_{GS}=-HN/2$ |
-
-A single spin-flip costs energy $+H$; the excitation gap equals $H$.
-
-#### Case B — $H = 0$ (no external field)
-- **Ferromagnetic ($J < 0$):** All spins align. Ground state $S_z^{tot}=\pm N/2$,
-  $E_{GS}=JN/2$. (The bond list counts each undirected bond twice, so $2N$
-  directed bonds each contribute $J/4$, giving $JN/2$.)
-- **Antiferromagnetic ($J > 0$):** Ground state is a **quantum singlet** ($S_z^{tot}=0$,
-  even $N$), $E_{GS}<0$. For the 2×2 lattice (N=4, 8 directed bonds): $E_{GS}/J=-4$.
-
-#### General case $H, J > 0$
-As $H/J$ rises from 0, level crossings drive the ground state:
-$S_z=0\!\to\!1\!\to\!\cdots\!\to\!N/2$, producing **magnetisation plateaus**.
-Saturation field (square lattice, double-bond convention): $H_{sat}/J = 4$.
-        """)
-
     # ── Controls ──────────────────────────────────────────────────
     _lat_opts = {"2 × 2  (N = 4)": 2,
                  "4 × 4  (N = 16)": 4,
