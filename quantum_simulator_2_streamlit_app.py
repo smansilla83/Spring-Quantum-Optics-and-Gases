@@ -650,38 +650,43 @@ with tab_sim:
             f'J = 0: all basis states degenerate; one representative shown.</small>'
             if _sa_J < 1e-6 else ""
         )
-        _EJ_disp = _best_E_sel / _sa_J_norm
+        # Eigenvalue at selected (J, H): total = exchange part - Zeeman shift
+        _E0_J   = _gs_dat["E0"] / _sa_J_norm           # H=0 sector eigenvalue / J
+        _HzSz_J = _sa_HJ_marker * (_best_Sz_sel / 2.0) # (H/J) * Sz  (Zeeman contribution)
+        _Etot_J = _E0_J - _HzSz_J                      # full eigenvalue / J at selected (J,H)
         st.markdown(
-            f'<div class="caption-box" style="border-left:4px solid {ROSE};">'
-            f'<table style="border-collapse:collapse;width:100%;">'
-            f'<tr>'
+            f'<div class="caption-box" style="border-left:4px solid {ROSE};">' 
+            f'<table style="border-collapse:collapse;width:100%;"><tr>'
             f'<td style="padding-right:2.5rem;vertical-align:top;white-space:nowrap;">'
-            f'<div style="font-size:0.76rem;color:{T["txt_mute"]};margin-bottom:0.3rem;">'
-            f'GROUND STATE &nbsp;—&nbsp; J = {_sa_J:.3g},'
-            f'&nbsp;H = {_sa_H:.3g},&nbsp;H/J = {_sa_HJ_marker:.3g}'
+            f'<div style="font-size:0.74rem;font-weight:600;letter-spacing:0.06em;'
+            f'color:{T["txt_mute"]};margin-bottom:0.5rem;">'
+            f'GROUND STATE &nbsp;&mdash;&nbsp; '
+            f'J = {_sa_J:.3g} &ensp; H = {_sa_H:.3g} &ensp; H/J = {_sa_HJ_marker:.3g}'
             f'</div>'
-            f'<div style="font-size:1.1rem;font-weight:700;color:{T["txt_main"]};">'
-            f'S<sub>z</sub> = {_sz_label(_best_Sz_sel)}'
+            f'<div style="font-size:1.0rem;font-weight:700;color:{T["txt_main"]};">'
+            f'S<sub>z</sub> = {_sz_label(_best_Sz_sel)}'
             f'</div>'
-            f'<div style="font-size:0.95rem;color:{T["txt_main"]};margin-top:0.2rem;">'
-            f'E / J = {_EJ_disp:.5g}'
+            f'<div style="font-size:1.3rem;font-weight:800;color:{ROSE};margin-top:0.35rem;">'
+            f'E(J,H) / J = {_Etot_J:.5g}'
             f'</div>'
-            f'<div style="font-size:0.80rem;color:{T["txt_mute"]};margin-top:0.15rem;">'
-            f'dim = {_gs_dat["dim"]:,}'
+            f'<div style="font-size:0.82rem;color:{T["txt_mute"]};margin-top:0.3rem;line-height:1.65;">'
+            f'E<sub>0</sub>/J = {_E0_J:.5g}'
+            f'&ensp;<span style="font-size:0.75rem;">(exchange only, H=0)</span><br>'
+            f'&minus; (H/J)&thinsp;&middot;&thinsp;S<sub>z</sub> = &minus;{_HzSz_J:.5g}'
+            f'&ensp;<span style="font-size:0.75rem;">(Zeeman shift)</span>'
+            f'</div>'
+            f'<div style="font-size:0.78rem;color:{T["txt_mute"]};margin-top:0.3rem;">'
+            f'dim = {_gs_dat["dim"]:,}'
             f'</div>'
             f'{_j0_note_g}'
             f'</td>'
             f'<td style="vertical-align:top;">'
-            f'<div style="font-size:0.76rem;color:{T["txt_mute"]};margin-bottom:0.3rem;">'
-            f'DOMINANT AMPLITUDES &nbsp;|ψ⟩'
+            f'<div style="font-size:0.74rem;font-weight:600;letter-spacing:0.06em;'
+            f'color:{T["txt_mute"]};margin-bottom:0.5rem;">'
+            f'DOMINANT AMPLITUDES &nbsp;|\u03c8\u27e9'
             f'</div>'
-            f'<table style="border-collapse:collapse;">'
-            f'{_rows_gs}{_more_note_g}'
-            f'</table>'
-            f'</td>'
-            f'</tr>'
-            f'</table>'
-            f'</div>',
+            f'<table style="border-collapse:collapse;">{_rows_gs}{_more_note_g}</table>'
+            f'</td></tr></table></div>',
             unsafe_allow_html=True,
         )
 
